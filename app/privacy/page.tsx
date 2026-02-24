@@ -11,7 +11,6 @@ export default function PrivacyPolicy() {
 
       <div className="container mx-auto px-4 py-24 max-w-4xl">
         
-        {/* Header */}
         <div className="mb-12 border-b border-white/10 pb-8">
             <div className="flex items-center gap-3 text-blue-500 mb-4">
                 <Shield className="w-8 h-8" />
@@ -23,23 +22,20 @@ export default function PrivacyPolicy() {
             </p>
         </div>
 
-        {/* Content */}
         <div className="space-y-12 text-gray-300 leading-relaxed">
             
-            {/* 1. Introduction */}
             <section>
                 <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                     1. Introduction & Compliance
                 </h2>
                 <p className="mb-4">
-                    NeneTickets ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy outlines how we collect, use, and safeguard your personal data in accordance with the <strong>Constitution of Kenya, 2010</strong> (Article 31) and the <strong>Data Protection Act, 2019</strong>.
+                    NeneTickets (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy. This Privacy Policy outlines how we collect, use, and safeguard your personal data in accordance with the <strong>Constitution of Kenya, 2010</strong> (Article 31) and the <strong>Data Protection Act, 2019</strong>.
                 </p>
                 <p>
                     By using our platform, buying tickets, or hosting events, you consent to the data practices described in this policy. We act as a <strong>Data Controller</strong> for user accounts and a <strong>Data Processor</strong> on behalf of Event Organizers.
                 </p>
             </section>
 
-            {/* 2. Data We Collect */}
             <section>
                 <h2 className="text-2xl font-bold text-white mb-4">2. Personal Data We Collect</h2>
                 <p className="mb-4">To provide our ticketing services, we collect the following personal data:</p>
@@ -51,7 +47,6 @@ export default function PrivacyPolicy() {
                 </ul>
             </section>
 
-            {/* 3. M-Pesa & Payment Processing */}
             <section className="bg-green-900/10 border border-green-500/20 p-6 rounded-2xl">
                 <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center gap-2">
                     <Lock className="w-5 h-5" /> 3. M-Pesa & Financial Privacy
@@ -64,7 +59,6 @@ export default function PrivacyPolicy() {
                 </p>
             </section>
 
-            {/* 4. How We Use Your Data */}
             <section>
                 <h2 className="text-2xl font-bold text-white mb-4">4. Purpose of Processing</h2>
                 <p className="mb-4">We process your data for the following lawful purposes:</p>
@@ -79,7 +73,7 @@ export default function PrivacyPolicy() {
                     </div>
                     <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                         <h3 className="font-bold text-white mb-2">Legitimate Interest</h3>
-                        <p className="text-sm">Improving our platform, customer support, and "NeneCoins" loyalty tracking.</p>
+                        <p className="text-sm">Improving our platform, customer support, and &quot;NeneCoins&quot; loyalty tracking.</p>
                     </div>
                     <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                         <h3 className="font-bold text-white mb-2">Consent</h3>
@@ -88,7 +82,6 @@ export default function PrivacyPolicy() {
                 </div>
             </section>
 
-            {/* 5. Sharing with Event Organizers */}
             <section>
                 <h2 className="text-2xl font-bold text-white mb-4">5. Sharing Data with Event Organizers</h2>
                 <p>
@@ -103,7 +96,6 @@ export default function PrivacyPolicy() {
                 </p>
             </section>
 
-            {/* 6. Your Rights (DPA 2019) */}
             <section className="bg-blue-900/10 border border-blue-500/20 p-6 rounded-2xl">
                 <h2 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2">
                     <Scale className="w-5 h-5" /> 6. Your Rights under Kenyan Law
@@ -120,7 +112,7 @@ export default function PrivacyPolicy() {
                     </li>
                     <li className="flex gap-3">
                         <div className="min-w-[6px] h-[6px] rounded-full bg-blue-500 mt-2"></div>
-                        <span><strong>Right to Erasure ("Right to be Forgotten"):</strong> Ask us to delete your personal data where there is no legal reason to keep it.</span>
+                        <span><strong>Right to Erasure (&quot;Right to be Forgotten&quot;):</strong> Ask us to delete your personal data where there is no legal reason to keep it.</span>
                     </li>
                     <li className="flex gap-3">
                         <div className="min-w-[6px] h-[6px] rounded-full bg-blue-500 mt-2"></div>
@@ -129,7 +121,6 @@ export default function PrivacyPolicy() {
                 </ul>
             </section>
 
-            {/* 7. Contact Info */}
             <section>
                 <h2 className="text-2xl font-bold text-white mb-4">7. Contact Data Controller</h2>
                 <p className="mb-6">
@@ -159,7 +150,6 @@ export default function PrivacyPolicy() {
 
         </div>
         
-        {/* Footer Link */}
         <div className="mt-20 pt-8 border-t border-white/10 text-center">
             <Link href="/">
                 <button className="text-gray-500 hover:text-white transition text-sm">

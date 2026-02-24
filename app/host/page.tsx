@@ -201,16 +201,16 @@ export default function HostPage() {
             </div>
             <h2 className="text-xl font-bold mb-6">Your Events</h2>
             {myEvents.length > 0 ? (
-                <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden"><table className="w-full text-left"><thead className="bg-white/5 text-gray-400 text-sm uppercase"><tr><th className="p-6">Event Name</th><th className="p-6">Date</th><th className="p-6">Status</th><th className="p-6 text-right">Price</th></tr></thead><tbody className="divide-y divide-white/5">{myEvents.map((event: any, i: number) => (<tr key={i} className="hover:bg-white/5 transition"><td className="p-6 font-bold flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-gray-800 overflow-hidden"><img src={event.image} className="w-full h-full object-cover" /></div>{event.title}</td><td className="p-6 text-gray-400">{event.date}</td><td className="p-6"><span className="bg-green-500/20 text-green-400 text-xs font-bold px-2 py-1 rounded-full">LIVE</span></td><td className="p-6 text-right font-mono">{event.price}</td></tr>))}</tbody></table></div>
+                <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden"><table className="w-full text-left"><thead className="bg-white/5 text-gray-400 text-sm uppercase"><tr><th className="p-6">Event Name</th><th className="p-6">Date</th><th className="p-6">Status</th><th className="p-6 text-right">Price</th></tr></thead><tbody className="divide-y divide-white/5">{myEvents.map((event: any, i: number) => (<tr key={i} className="hover:bg-white/5 transition"><td className="p-6 font-bold flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-gray-800 overflow-hidden">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={event.image} alt="Event" className="w-full h-full object-cover" /></div>{event.title}</td><td className="p-6 text-gray-400">{event.date}</td><td className="p-6"><span className="bg-green-500/20 text-green-400 text-xs font-bold px-2 py-1 rounded-full">LIVE</span></td><td className="p-6 text-right font-mono">{event.price}</td></tr>))}</tbody></table></div>
             ) : (
-                <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/10"><p className="text-gray-400 mb-4">You haven't created any events yet.</p><button onClick={() => setView('create')} className="text-blue-400 font-bold hover:underline">Create your first event</button></div>
+                <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/10"><p className="text-gray-400 mb-4">You haven&apos;t created any events yet.</p><button onClick={() => setView('create')} className="text-blue-400 font-bold hover:underline">Create your first event</button></div>
             )}
         </div>
       </main>
     );
   }
 
-  // VIEW: CREATE (Unchanged logic, just keeping code concise)
+  // VIEW: CREATE 
   return (
     <main className="min-h-screen bg-black text-white selection:bg-pink-600 selection:text-white">
       <Navbar />
@@ -231,7 +231,7 @@ export default function HostPage() {
                     <div className="bg-green-500/10 border border-green-500/20 p-8 rounded-3xl text-center"><div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 className="w-10 h-10 text-white" /></div><h2 className="text-3xl font-bold text-white mb-2">Event Live!</h2><p className="text-gray-300 mb-8">Your event is now tracking sales on your dashboard.</p><div className="flex gap-4 justify-center"><button onClick={() => { setView('dashboard'); setIsPublished(false); }} className="bg-white text-black font-bold py-3 px-6 rounded-xl hover:bg-gray-200 transition">Go to Dashboard</button></div></div>
                 )}
             </div>
-            <div className="hidden lg:flex w-1/2 flex-col items-start sticky top-24 h-fit"><div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> Live Preview</div><div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl overflow-hidden"><div className="h-64 relative bg-gray-800"><img src={formData.image} className="w-full h-full object-cover" /></div><div className="p-5"><h3 className="text-xl font-bold mb-2">{formData.title || "Your Event Title"}</h3><p className="text-gray-400 text-sm">{formData.date || "Date"} • {formData.location || "Location"}</p></div></div></div>
+            <div className="hidden lg:flex w-1/2 flex-col items-start sticky top-24 h-fit"><div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> Live Preview</div><div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl overflow-hidden"><div className="h-64 relative bg-gray-800">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={formData.image} alt="Preview" className="w-full h-full object-cover" /></div><div className="p-5"><h3 className="text-xl font-bold mb-2">{formData.title || "Your Event Title"}</h3><p className="text-gray-400 text-sm">{formData.date || "Date"} • {formData.location || "Location"}</p></div></div></div>
         </div>
       </div>
     </main>

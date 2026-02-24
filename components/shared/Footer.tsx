@@ -1,0 +1,75 @@
+"use client";
+
+import Link from "next/link";
+import { Twitter, Instagram, Facebook, Mail, MapPin, Phone } from "lucide-react";
+
+export default function Footer() {
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <footer className="bg-black border-t border-white/10 pt-16 pb-8 text-gray-400 text-sm">
+      <div className="container mx-auto px-4">
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+            {/* BRAND */}
+            <div className="space-y-4">
+                <div className="flex items-center gap-2 select-none">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xl">🎟️</div>
+                    <span className="text-xl font-bold text-white tracking-wide">NeneTickets</span>
+                </div>
+                <p className="leading-relaxed">
+                    The future of event ticketing in Kenya. Secure, fast, and reliable booking for concerts, sports, and tech conferences.
+                </p>
+            </div>
+
+            {/* QUICK LINKS */}
+            <div>
+                <h3 className="text-white font-bold mb-4 uppercase tracking-wider">Discover</h3>
+                <ul className="space-y-3">
+                    <li><Link href="/events" className="hover:text-blue-400 transition">Browse Events</Link></li>
+                    <li><Link href="/events?category=Music" className="hover:text-blue-400 transition">Concerts</Link></li>
+                    <li><Link href="/events?category=Sports" className="hover:text-blue-400 transition">Sports Matches</Link></li>
+                    <li><Link href="/host" className="hover:text-blue-400 transition">Host an Event</Link></li>
+                </ul>
+            </div>
+
+            {/* SUPPORT */}
+            <div>
+                <h3 className="text-white font-bold mb-4 uppercase tracking-wider">Support</h3>
+                <ul className="space-y-3">
+                    <li><Link href="/support" className="hover:text-blue-400 transition">Help Center</Link></li>
+                    <li><Link href="/tickets" className="hover:text-blue-400 transition">My Tickets</Link></li>
+                    <li><Link href="/privacy" className="hover:text-blue-400 transition">Privacy Policy</Link></li>
+                    <li><Link href="/support" className="hover:text-blue-400 transition">Contact Us</Link></li>
+                </ul>
+            </div>
+
+            {/* CONTACT */}
+            <div>
+                <h3 className="text-white font-bold mb-4 uppercase tracking-wider">Contact</h3>
+                <ul className="space-y-3">
+                    <li className="flex items-center gap-3"><MapPin className="w-4 h-4" /> Nairobi, Kenya</li>
+                    <li className="flex items-center gap-3"><Mail className="w-4 h-4" /> support@nenetickets.co.ke</li>
+                    <li className="flex items-center gap-3"><Phone className="w-4 h-4" /> +254 794 588 860</li>
+                </ul>
+                <div className="flex gap-4 mt-6">
+                    <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-blue-600 hover:text-white transition"><Twitter className="w-4 h-4" /></a>
+                    <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-pink-600 hover:text-white transition"><Instagram className="w-4 h-4" /></a>
+                    <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-blue-800 hover:text-white transition"><Facebook className="w-4 h-4" /></a>
+                </div>
+            </div>
+        </div>
+
+        {/* BOTTOM BAR */}
+        <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <p>&copy; {currentYear} NeneTickets. All rights reserved.</p>
+            <div className="flex gap-6 text-xs font-bold uppercase tracking-widest">
+                <Link href="/privacy" className="hover:text-white transition">Privacy</Link>
+                <Link href="/terms" className="hover:text-white transition">Terms</Link>
+                <Link href="/sitemap" className="hover:text-white transition">Sitemap</Link>
+            </div>
+        </div>
+      </div>
+    </footer>
+  );
+}

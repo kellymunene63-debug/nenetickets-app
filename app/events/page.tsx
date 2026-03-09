@@ -7,6 +7,7 @@ import EventCard from "../../components/home/EventCard";
 import Link from "next/link";
 import { Filter, X, Search } from "lucide-react";
 
+// DEFAULT DATA
 const DEFAULT_EVENTS = [
   { id: "1", title: "Safaricom Jazz Festival 2026", date: "Feb 14, 2026", location: "Carnivore Grounds", price: "KES 2,500", image: "https://images.unsplash.com/photo-1511192336575-5a79af67a629?q=80&w=2070", category: "Music", aiTag: "Selling Fast ⚡" },
   { id: "2", title: "Gor Mahia vs AFC Leopards", date: "Feb 21, 2026", location: "Kasarani Stadium", price: "KES 500", image: "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931", category: "Sports", aiTag: "High Demand 🔥" },
@@ -20,6 +21,9 @@ const CATEGORIES = ["All", "Music", "Sports", "Business", "Arts", "Tech", "Night
 
 function EventsContent() {
   const searchParams = useSearchParams();
+  
+  // 1. INITIALIZE STATE FROM URL
+  // If URL is /events?search=Jazz, this becomes "Jazz"
   const initialSearch = searchParams.get('search') || "";
   const initialCategory = searchParams.get('category') || "All";
 
@@ -35,6 +39,7 @@ function EventsContent() {
     }
   }, []);
 
+  // 2. DUAL FILTER LOGIC
   const filteredEvents = allEvents.filter(event => {
     const matchesCategory = activeCategory === "All" || event.category === activeCategory;
     const query = searchQuery.toLowerCase();
@@ -134,6 +139,7 @@ function EventsContent() {
   );
 }
 
+// Wrap in Suspense for Next.js boundary requirements
 export default function AllEventsPage() {
   return <Suspense fallback={<div>Loading...</div>}><EventsContent /></Suspense>;
 }

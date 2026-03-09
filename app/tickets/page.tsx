@@ -49,7 +49,7 @@ function TicketContent() {
             useCORS: true, // Vital for capturing images from URL
             scale: 2,      // High resolution (Retina)
             backgroundColor: null, // Transparent corners support
-        });
+        }as any); 
 
         const image = canvas.toDataURL("image/png");
         const link = document.createElement("a");
@@ -88,6 +88,7 @@ function TicketContent() {
                 {/* IMAGE HEADER */}
                 <div className="h-48 relative">
                     {/* crossOrigin is vital for html2canvas */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img 
                         src={ticketData.image} 
                         alt="Event" 

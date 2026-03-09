@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from '@clerk/nextjs';
 import { Inter } from "next/font/google";
 import "./globals.css";
 import NeneBot from "../components/shared/NeneBot";
-import Footer from "../components/shared/Footer"; // 1. IMPORT FOOTER
+import Footer from "../components/shared/Footer";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,17 +18,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        {/* Main Content */}
-        {children}
-        
-        {/* 2. Global Footer (Shows on every page) */}
-        <Footer />
-
-        {/* Floating AI Bot */}
-        <NeneBot />
-      </body>
-    </html>
+    // We are forcing Clerk to look directly at your environment variable here
+    <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
+      <html lang="en">
+        <body className={inter.className}>
+          {children}
+          <Footer />
+          <NeneBot />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

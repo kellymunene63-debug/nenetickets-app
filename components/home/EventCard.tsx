@@ -31,6 +31,7 @@ export default function EventCard({ event }: { event: EventProps }) {
           </div>
         )}
         
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={event.image}
           alt={event.title}

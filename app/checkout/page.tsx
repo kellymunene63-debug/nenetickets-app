@@ -119,6 +119,7 @@ function CheckoutContent() {
       }, 5000);
       return () => { clearInterval(timer); clearTimeout(successTrigger); };
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   const ticketUrl = `/tickets?title=${encodeURIComponent(eventTitle)}&type=${encodeURIComponent(ticketType)}&image=${encodeURIComponent(image)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}&location=${encodeURIComponent(location)}&quantity=${quantity}&id=${generatedTicketId}&holder=${encodeURIComponent(holderName)}`;

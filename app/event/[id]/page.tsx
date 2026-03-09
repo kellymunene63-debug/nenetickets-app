@@ -121,6 +121,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
       {/* HERO SECTION */}
       <div className="relative h-[60vh] w-full">
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={event.image} alt={event.title} className="w-full h-full object-cover" />
         <div className="absolute top-24 left-4 z-50">
              <Link href="/" className="flex items-center gap-2 bg-black/50 backdrop-blur-md px-4 py-2 rounded-full hover:bg-black/70 transition text-sm font-bold">

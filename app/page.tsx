@@ -1,14 +1,17 @@
 "use client";
 
 import Navbar from "../components/shared/Navbar";
-import { useState } from "react";
+import Footer from "../components/shared/Footer";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, ArrowRight, TrendingUp, Music, Trophy, Briefcase,
-  Ticket, CreditCard, Smartphone, Star, CheckCircle, Zap, Shield
+  Ticket, CreditCard, Smartphone, Star, CheckCircle, Zap, Shield,
+  Calendar, MapPin, ChevronRight
 } from "lucide-react";
 import Link from "next/link";
 import EventCard from "../components/home/EventCard";
+import { SignedIn } from "@clerk/nextjs";
 
 const TRENDING_EVENTS = [
   { id: "1", title: "Safaricom Jazz Festival 2026", date: "Jun 14, 2026", location: "Carnivore Grounds", price: "KES 2,500", image: "https://images.unsplash.com/photo-1511192336575-5a79af67a629?q=80&w=2070", category: "Music", aiTag: "Selling Fast ⚡" },
@@ -71,9 +74,33 @@ const TESTIMONIALS = [
   { name: "Faith K.", role: "Sports Fan", quote: "Booked Gor Mahia tickets from my phone during my lunch break. NeneTickets is the move.", avatar: "FK" },
 ];
 
+interface StoredTicket {
+  id: string;
+  title: string;
+  type: string;
+  date: string;
+  time: string;
+  location: string;
+  image: string;
+}
+
 export default function Home() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [upcomingTickets, setUpcomingTickets] = useState<StoredTicket[]>([]);
+
+  useEffect(() => {
+    try {
+      const all: StoredTicket[] = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
+      const now = new Date();
+      const upcoming = all
+        .filter((t) => new Date(t.date) >= now)
+        .slice(0, 3);
+      setUpcomingTickets(upcoming);
+    } catch {
+      setUpcomingTickets([]);
+    }
+  }, []);
 
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -245,6 +272,54 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── PERSONALIZED: YOUR UPCOMING EVENTS ───────────────────────────── */}
+      <SignedIn>
+        {upcomingTickets.length > 0 && (
+          <section className="py-16 border-t border-white/5">
+            <div className="container mx-auto px-4">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-1">Your Account</p>
+                  <h2 className="text-2xl font-bold">Your Upcoming Events</h2>
+                </div>
+                <Link href="/tickets">
+                  <button className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-bold transition">
+                    View all tickets <ChevronRight className="w-4 h-4" />
+                  </button>
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {upcomingTickets.map((ticket) => (
+                  <Link key={ticket.id} href="/tickets">
+                    <div className="bg-white/5 border border-white/10 hover:border-white/20 rounded-2xl overflow-hidden flex items-stretch transition group cursor-pointer">
+                      {ticket.image && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={ticket.image} alt={ticket.title} className="w-20 h-full object-cover flex-shrink-0" />
+                      )}
+                      <div className="p-4 flex-1 min-w-0">
+                        <p className="text-blue-400 text-xs font-bold uppercase capitalize mb-1">{ticket.type}</p>
+                        <p className="font-bold text-sm leading-tight mb-2 truncate group-hover:text-blue-400 transition">{ticket.title}</p>
+                        <div className="space-y-1 text-xs text-gray-500">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3" /> {ticket.date}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="w-3 h-3" /> {ticket.location}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center pr-3">
+                        <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition" />
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+      </SignedIn>
+
       {/* ── TESTIMONIALS ─────────────────────────────────────────────────── */}
       <section className="py-20 border-t border-white/5">
         <div className="container mx-auto px-4">
@@ -274,6 +349,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      <Footer />
     </main>
   );
 }

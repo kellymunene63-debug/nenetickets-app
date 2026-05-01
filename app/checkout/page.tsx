@@ -240,9 +240,22 @@ function CheckoutContent() {
                         </div>
                     )}
 
-                    <div className="border-t border-gray-200 pt-6">
-                        <h3 className="font-bold mb-4">Payment Method</h3>
-                        <div className="border-2 border-green-500 bg-green-50 rounded-xl p-4 flex items-center justify-between mb-4"><span className="font-bold text-green-900">M-Pesa Express</span><div className="w-4 h-4 rounded-full bg-green-500"></div></div>
+                    <div className="border-2 border-green-500 bg-green-50 rounded-xl p-4 flex items-center justify-between mb-4">
+  <div className="flex items-center gap-3">
+    <div className="w-9 h-9 bg-[#00A651] rounded-lg flex items-center justify-center shadow">
+      <span className="text-white text-sm font-black">M</span>
+    </div>
+    <div>
+      <div className="font-bold text-green-900">M-Pesa Express</div>
+      <div className="text-xs text-green-700">STK push sent to your phone</div>
+    </div>
+  </div>
+  <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  </div>
+</div>
                         
                         {/* PHONE INPUT */}
                         <div>
@@ -268,6 +281,31 @@ function CheckoutContent() {
                     >
                         {status === "processing" ? <Loader2 className="animate-spin" /> : <><Lock className="w-4 h-4" /> Pay KES {finalTotal.toLocaleString()}</>}
                     </button>
+        {/* Security Trust Row */}
+<div className="flex items-center justify-center gap-4 pt-2 flex-wrap">
+  <div className="flex items-center gap-1 text-gray-400 text-xs">
+    <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+    </svg>
+    256-bit SSL
+  </div>
+  <div className="flex items-center gap-1.5">
+    <div className="w-4 h-4 bg-[#00A651] rounded-full flex items-center justify-center">
+      <span className="text-white text-[7px] font-black">M</span>
+    </div>
+    <span className="text-xs text-gray-500 font-bold">M-Pesa</span>
+  </div>
+  <div>
+    <span className="bg-[#1A1F71] text-white px-1.5 py-0.5 rounded text-[9px] font-black italic">VISA</span>
+  </div>
+  <div className="flex items-center gap-1">
+    <div className="flex -space-x-1">
+      <div className="w-3.5 h-3.5 rounded-full bg-[#EB001B]"></div>
+      <div className="w-3.5 h-3.5 rounded-full bg-[#F79E1B]"></div>
+    </div>
+    <span className="text-xs text-gray-500 font-bold ml-1">Mastercard</span>
+  </div>
+</div>
                 </>
             )}
         </div>

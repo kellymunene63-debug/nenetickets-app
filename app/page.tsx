@@ -1,7 +1,6 @@
 "use client";
 
 import Navbar from "../components/shared/Navbar";
-import Footer from "../components/shared/Footer";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -349,7 +348,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <Footer />
     </main>
   );
 }

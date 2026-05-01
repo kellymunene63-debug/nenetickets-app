@@ -19,25 +19,14 @@ export default function Loading() {
               />
             </svg>
           </div>
-          {/* Ping ring */}
           <div className="absolute inset-0 rounded-2xl bg-blue-600/30 animate-ping" />
         </div>
 
-        {/* Progress bar */}
-        <div className="w-40 h-1 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-blue-600 to-purple-500 rounded-full animate-[loading_1.2s_ease-in-out_infinite]" />
-        </div>
+        {/* Spinning ring */}
+        <div className="w-10 h-10 border-2 border-white/10 border-t-blue-500 rounded-full animate-spin" />
 
         <p className="text-gray-500 text-sm font-bold tracking-widest uppercase">Loading</p>
       </div>
-
-      <style jsx global>{`
-        @keyframes loading {
-          0% { width: 0%; margin-left: 0%; }
-          50% { width: 70%; margin-left: 15%; }
-          100% { width: 0%; margin-left: 100%; }
-        }
-      `}</style>
     </div>
   );
 }

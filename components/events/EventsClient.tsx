@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import EventCard from "../home/EventCard";
 import Link from "next/link";
 import { Filter, Search, SlidersHorizontal, X, ChevronDown } from "lucide-react";
-import type { Event } from "../../lib/events";
+import type { Event } from "../../libs/events";
 
 const CATEGORIES = ["All", "Music", "Sports", "Business", "Arts", "Tech", "Nightlife"];
 

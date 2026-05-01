@@ -272,7 +272,6 @@ function CheckoutContent() {
                             </div>
                             {isPhoneTouched && !isPhoneValid && <p className="text-xs text-red-500 mt-2 font-bold">Please enter a valid phone number.</p>}
                         </div>
-                    </div>
                     
                     <button 
                         onClick={handlePayment} 

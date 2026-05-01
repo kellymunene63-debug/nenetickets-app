@@ -195,8 +195,9 @@ export default function HostPage() {
   // ─── AUTH VIEW ───────────────────────────────────────────────────────────────
   if (view === "auth") {
     return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+      <main className="min-h-screen bg-black text-white">
         <Navbar />
+        <div className="flex items-center justify-center min-h-screen p-4 pt-24">
         <div className="max-w-md w-full bg-white/5 border border-white/10 p-8 rounded-3xl backdrop-blur-md relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <ShieldCheck className="w-32 h-32" />
@@ -267,6 +268,7 @@ export default function HostPage() {
               </button>
             </p>
           </div>
+        </div>
         </div>
       </main>
     );

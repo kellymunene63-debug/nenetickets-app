@@ -60,6 +60,11 @@ export default function Navbar() {
             </SignInButton>
           </SignedOut>
           <SignedIn>
+            <Link href="/tickets">
+              <button className="text-sm font-bold text-gray-300 hover:text-white transition flex items-center gap-1.5">
+                <Ticket className="w-4 h-4" /> My Tickets
+              </button>
+            </Link>
             <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "w-10 h-10 border-2 border-blue-500" } }} />
           </SignedIn>
         </div>
@@ -111,8 +116,17 @@ export default function Navbar() {
               </SignInButton>
             </SignedOut>
             <SignedIn>
-              <div onClick={close}>
-                <UserButton afterSignOutUrl="/" />
+              <div className="flex flex-col gap-1 w-full">
+                <button
+                  onClick={() => handleNav("/tickets")}
+                  className="flex items-center justify-between w-full text-left text-gray-300 hover:text-white font-bold py-3 px-2 rounded-xl hover:bg-white/5 transition"
+                >
+                  My Tickets
+                  <ChevronRight className="w-4 h-4 text-gray-600" />
+                </button>
+                <div onClick={close} className="px-2 py-2">
+                  <UserButton afterSignOutUrl="/" />
+                </div>
               </div>
             </SignedIn>
           </div>

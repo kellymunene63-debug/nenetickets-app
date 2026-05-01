@@ -328,6 +328,39 @@ export default function HostPage() {
             </div>
           </div>
 
+          {/* Revenue Chart */}
+          {myEvents.length > 0 && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-10">
+              <h2 className="text-base font-bold mb-6 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-blue-400" /> Revenue by Event
+              </h2>
+              <div className="space-y-3">
+                {(() => {
+                  const maxRev = Math.max(...myEvents.map((ev: any) => getRevenueForEvent(ev)), 1);
+                  return myEvents.map((ev: any) => {
+                    const rev = getRevenueForEvent(ev);
+                    const sold = getTicketsSoldForEvent(ev.title);
+                    const pct = Math.round((rev / maxRev) * 100);
+                    return (
+                      <div key={ev.id}>
+                        <div className="flex items-center justify-between mb-1 text-xs">
+                          <span className="text-gray-400 truncate max-w-[60%] font-bold">{ev.title}</span>
+                          <span className="text-gray-500">{sold} sold · {rev > 0 ? `KES ${rev.toLocaleString()}` : "—"}</span>
+                        </div>
+                        <div className="w-full bg-white/5 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Events Table */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">Your Events</h2>

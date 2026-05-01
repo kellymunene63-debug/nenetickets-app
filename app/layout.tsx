@@ -8,7 +8,11 @@ import Footer from "../components/shared/Footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "NeneTickets | Future of Events",
+  metadataBase: new URL('https://nenetickets.co.ke'),
+  title: {
+    default: "NeneTickets | Discover Events in Kenya",
+    template: "%s | NeneTickets",
+  },
   description: "Experience the extraordinary. Book tickets for concerts, sports, and tech events in Kenya.",
 };
 
@@ -18,7 +22,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // We are forcing Clerk to look directly at your environment variable here
     <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
       <html lang="en">
         <body className={inter.className}>

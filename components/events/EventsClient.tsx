@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import EventCard from "../home/EventCard";
 import Link from "next/link";
-import { Filter, Search, SlidersHorizontal, X, ChevronDown } from "lucide-react";
-import type { Event } from "../../libs/events";
+import { Filter, Search, SlidersHorizontal, X, ChevronDown, Calendar, MapPin, Zap } from "lucide-react";
+import type { Event } from "../../lib/events";
 
 const CATEGORIES = ["All", "Music", "Sports", "Business", "Arts", "Tech", "Nightlife"];
 
@@ -94,6 +94,16 @@ export default function EventsClient({ defaultEvents }: { defaultEvents: Event[]
     setMaxPrice(maxPossiblePrice);
   };
 
+  // Featured = first event with highest aiTag priority (selling fast / high demand)
+  const featuredEvent = useMemo(() => {
+    const priority = ["Selling Fast", "High Demand", "Trending", "Must Attend"];
+    for (const keyword of priority) {
+      const match = allEvents.find((e) => e.aiTag.includes(keyword));
+      if (match) return match;
+    }
+    return allEvents[0] ?? null;
+  }, [allEvents]);
+
   return (
     <div className="container mx-auto px-4 pt-32 pb-8">
       {/* Breadcrumb */}
@@ -102,6 +112,43 @@ export default function EventsClient({ defaultEvents }: { defaultEvents: Event[]
         <span>/</span>
         <span className="text-white">All Events</span>
       </div>
+
+      {/* Featured event banner */}
+      {featuredEvent && !searchQuery && activeCategory === "All" && (
+        <Link href={`/event/${featuredEvent.id}`}>
+          <div className="relative rounded-3xl overflow-hidden mb-12 group cursor-pointer h-64 md:h-80">
+            {/* Image */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={featuredEvent.image}
+              alt={featuredEvent.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+            />
+            {/* Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent" />
+
+            {/* Content */}
+            <div className="absolute inset-0 flex flex-col justify-end p-7 md:p-10">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="bg-blue-600 text-white text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Featured Event
+                </span>
+                <span className="bg-white/10 backdrop-blur-sm border border-white/10 text-white text-xs font-bold px-3 py-1 rounded-full">
+                  {featuredEvent.aiTag}
+                </span>
+              </div>
+              <h2 className="text-2xl md:text-4xl font-bold text-white mb-3 max-w-xl leading-tight group-hover:text-blue-400 transition-colors">
+                {featuredEvent.title}
+              </h2>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-300">
+                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-400" /> {featuredEvent.date}</span>
+                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-pink-400" /> {featuredEvent.location}</span>
+                <span className="bg-white/10 px-3 py-1 rounded-full font-bold">{featuredEvent.price}</span>
+              </div>
+            </div>
+          </div>
+        </Link>
+      )}
 
       {/* Header */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8">

@@ -143,7 +143,7 @@ export default function SupportPage() {
           {/* Quick contact buttons */}
           <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
             <a
-              href="https://wa.me/254700000000"
+              href="https://wa.me/254794588860"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-full font-bold text-sm transition shadow-lg shadow-green-600/20"

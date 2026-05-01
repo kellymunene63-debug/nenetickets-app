@@ -5,19 +5,9 @@ import { useSearchParams } from "next/navigation";
 import EventCard from "../home/EventCard";
 import Link from "next/link";
 import { Filter, Search } from "lucide-react";
+import type { Event } from "../../lib/events";
 
 const CATEGORIES = ["All", "Music", "Sports", "Business", "Arts", "Tech", "Nightlife"];
-
-type Event = {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  price: string;
-  image: string;
-  category: string;
-  aiTag: string;
-};
 
 export default function EventsClient({ defaultEvents }: { defaultEvents: Event[] }) {
   const searchParams = useSearchParams();

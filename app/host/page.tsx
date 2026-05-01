@@ -223,7 +223,27 @@ export default function HostPage() {
                     <div className="space-y-6 bg-white/5 border border-white/10 p-8 rounded-3xl backdrop-blur-sm">
                         <div><label className="block text-sm font-bold text-gray-400 mb-2">Event Title</label><input name="title" onChange={handleChange} placeholder="e.g. Nairobi Rock Festival" className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition" /></div>
                         <div><label className="block text-sm font-bold text-gray-400 mb-2">Cover Image</label><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" /><div className="grid grid-cols-2 gap-4"><div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-white/20 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition text-center group"><div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition"><Upload className="w-5 h-5 text-blue-400" /></div><span className="text-sm font-bold text-gray-300">Upload Photo</span></div><select name="image" onChange={handleChange} className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer"><option value="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070">Use Stock: Concert</option><option value="https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931">Use Stock: Sports</option></select></div></div>
-                        <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-400 mb-2">Date</label><input name="date" onChange={handleChange} placeholder="e.g. Dec 12" className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition" /></div><div><label className="block text-sm font-bold text-gray-400 mb-2">Location</label><input name="location" onChange={handleChange} placeholder="e.g. KICC" className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition" /></div></div>
+                        <div className="grid grid-cols-2 gap-4"><div>
+  <label className="block text-sm font-bold text-gray-400 mb-2">Date & Time</label>
+  <input
+    name="date"
+    type="datetime-local"
+    onChange={(e) => {
+      const raw = e.target.value;
+      if (!raw) return;
+      const formatted = new Date(raw).toLocaleString("en-KE", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      setFormData({ ...formData, date: formatted });
+    }}
+    min={new Date().toISOString().slice(0, 16)}
+    className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition [color-scheme:dark]"
+  />
+</div><div><label className="block text-sm font-bold text-gray-400 mb-2">Location</label><input name="location" onChange={handleChange} placeholder="e.g. KICC" className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition" /></div></div>
                         <div className="bg-black/30 p-6 rounded-2xl border border-white/5"><label className="block text-sm font-bold text-blue-400 mb-4 flex items-center gap-2"><Tag className="w-4 h-4" /> Ticket Options</label><div className="flex gap-4 mb-4"><input placeholder="Name (e.g. VVIP)" value={newTicket.name} onChange={(e) => setNewTicket({...newTicket, name: e.target.value})} className="w-2/3 bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500" /><input type="number" placeholder="Price" value={newTicket.price} onChange={(e) => setNewTicket({...newTicket, price: e.target.value})} className="w-1/3 bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500" /><button onClick={addTicket} className="bg-white/10 hover:bg-white/20 text-white p-3 rounded-xl transition"><Plus className="w-5 h-5" /></button></div><div className="space-y-2">{tickets.map((ticket, index) => (<div key={index} className="flex justify-between items-center bg-white/5 px-4 py-3 rounded-lg border border-white/5"><span className="font-bold text-sm">{ticket.name}</span><div className="flex items-center gap-4"><span className="text-gray-400 text-sm">KES {parseInt(ticket.price).toLocaleString()}</span><button onClick={() => removeTicket(index)} className="text-red-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button></div></div>))}</div></div>
                         <button onClick={handlePublish} disabled={isLoading || tickets.length === 0} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">{isLoading ? "Publishing..." : <><Sparkles className="w-5 h-5" /> Launch Event</>}</button>
                     </div>

@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Navbar from "../../components/shared/Navbar";
 import EventsClient from "../../components/events/EventsClient";
-import { DEFAULT_EVENTS } from "../../lib/events";
+import { DEFAULT_EVENTS } from "../../libs/events";
 
 export const metadata: Metadata = {
   title: "Browse Events",

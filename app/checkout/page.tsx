@@ -6,8 +6,15 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Phone, CheckCircle2, Ticket, ArrowLeft, Shield,
-  Loader2, MapPin, Calendar, ChevronRight, AlertCircle
+  Loader2, MapPin, Calendar, ChevronRight, AlertCircle, Tag, X
 } from "lucide-react";
+
+const PROMO_CODES: Record<string, number> = {
+  NENE10: 10,
+  LAUNCH20: 20,
+  STUDENT15: 15,
+  KENYA25: 25,
+};
 
 function generateTicketId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -31,7 +38,14 @@ function CheckoutContent() {
 
   const total = price * quantity;
   const serviceFee = Math.round(total * 0.03);
-  const grandTotal = total + serviceFee;
+
+  const [promoCode, setPromoCode] = useState("");
+  const [promoInput, setPromoInput] = useState("");
+  const [promoError, setPromoError] = useState("");
+  const [promoDiscount, setPromoDiscount] = useState(0);
+
+  const discountAmount = Math.round((total * promoDiscount) / 100);
+  const grandTotal = total + serviceFee - discountAmount;
 
   const [step, setStep] = useState<CheckoutStep>("summary");
   const [phone, setPhone] = useState("");
@@ -72,6 +86,24 @@ function CheckoutContent() {
     }, 120);
     return () => clearInterval(interval);
   }, [step, ticketId, title, type, grandTotal, quantity, date, time, location, image, phone]);
+
+  const applyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) { setPromoError("Enter a promo code"); return; }
+    const discount = PROMO_CODES[code];
+    if (!discount) { setPromoError("Invalid promo code"); setPromoDiscount(0); setPromoCode(""); return; }
+    setPromoDiscount(discount);
+    setPromoCode(code);
+    setPromoError("");
+    setPromoInput("");
+  };
+
+  const removePromo = () => {
+    setPromoCode("");
+    setPromoDiscount(0);
+    setPromoInput("");
+    setPromoError("");
+  };
 
   const validatePhone = (val: string) => {
     const cleaned = val.replace(/\s/g, "");
@@ -267,11 +299,54 @@ function CheckoutContent() {
                 <span>Service fee (3%)</span>
                 <span>KES {serviceFee.toLocaleString()}</span>
               </div>
+              {promoDiscount > 0 && (
+                <div className="flex justify-between text-green-400">
+                  <span className="flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" /> {promoCode} ({promoDiscount}% off)
+                    <button onClick={removePromo} className="text-gray-600 hover:text-red-400 transition">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                  <span>– KES {discountAmount.toLocaleString()}</span>
+                </div>
+              )}
               <div className="border-t border-white/10 pt-3 flex justify-between">
                 <span className="font-bold">Total</span>
                 <span className="text-xl font-bold text-blue-400">KES {grandTotal.toLocaleString()}</span>
               </div>
             </div>
+
+            {/* Promo code */}
+            {!promoCode && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                <p className="text-xs font-bold text-gray-400 mb-3 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5" /> Have a promo code?
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
+                    onKeyDown={(e) => e.key === "Enter" && applyPromo()}
+                    placeholder="e.g. NENE10"
+                    className={`flex-1 bg-black/40 border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none transition ${
+                      promoError ? "border-red-500" : "border-white/10 focus:border-blue-500"
+                    }`}
+                  />
+                  <button
+                    onClick={applyPromo}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {promoError && (
+                  <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> {promoError}
+                  </p>
+                )}
+              </div>
+            )}
 
             <button
               onClick={() => setStep("phone")}

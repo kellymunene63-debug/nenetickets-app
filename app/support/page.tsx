@@ -157,7 +157,7 @@ export default function SupportPage() {
               <Mail className="w-4 h-4" /> Email Support
             </a>
             <a
-              href="tel:+254700000000"
+              href="tel:+254794588860"
               className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold text-sm transition border border-white/10"
             >
               <Phone className="w-4 h-4" /> Call Us

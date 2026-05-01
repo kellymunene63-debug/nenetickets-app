@@ -1,318 +1,368 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { Lock, CheckCircle, Loader2, User, AlertCircle, Coins, Sparkles, Trophy, Phone, Info } from "lucide-react";
-import { motion } from "framer-motion";
+import Navbar from "../../components/shared/Navbar";
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  Phone, CheckCircle2, Ticket, ArrowLeft, Shield,
+  Loader2, MapPin, Calendar, ChevronRight, AlertCircle
+} from "lucide-react";
+
+function generateTicketId() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+type CheckoutStep = "summary" | "phone" | "waiting" | "confirmed";
 
 function CheckoutContent() {
-  const searchParams = useSearchParams();
-  
-  // GET DATA
-  const eventTitle = searchParams.get('title') || "Event Ticket";
-  const ticketType = searchParams.get('type') || "regular";
-  const priceString = searchParams.get('price') || "0";
-  const quantityString = searchParams.get('quantity') || "1";
-  
-  // Event Details
-  const image = searchParams.get('image') || "";
-  const date = searchParams.get('date') || "";
-  const time = searchParams.get('time') || "";
-  const location = searchParams.get('location') || "";
+  const params = useSearchParams();
+  const router = useRouter();
 
-  // MATH
-  const ticketPrice = parseInt(priceString);
-  const quantity = parseInt(quantityString);
-  const subTotal = ticketPrice * quantity;
-  const serviceFee = Math.round(subTotal * 0.03);
-  const grossTotal = subTotal + serviceFee;
+  const title = params.get("title") ?? "Event Ticket";
+  const type = params.get("type") ?? "regular";
+  const price = Number(params.get("price") ?? 0);
+  const quantity = Number(params.get("quantity") ?? 1);
+  const date = params.get("date") ?? "";
+  const time = params.get("time") ?? "";
+  const location = params.get("location") ?? "";
+  const image = params.get("image") ?? "";
 
-  // --- LOYALTY SYSTEM STATE ---
-  const [user, setUser] = useState<any>(null);
-  const [useCoins, setUseCoins] = useState(false);
-  const [coinsEarned, setCoinsEarned] = useState(0);
+  const total = price * quantity;
+  const serviceFee = Math.round(total * 0.03);
+  const grandTotal = total + serviceFee;
 
-  // Load User & Coin Balance
+  const [step, setStep] = useState<CheckoutStep>("summary");
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [ticketId] = useState(() => generateTicketId());
+  const [progress, setProgress] = useState(0);
+
+  // Simulate STK push loading
   useEffect(() => {
-    const savedUser = localStorage.getItem("nene_user_profile");
-    if (savedUser) {
-        setUser(JSON.parse(savedUser));
+    if (step !== "waiting") return;
+    const interval = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 100) {
+          clearInterval(interval);
+          // Save to localStorage
+          try {
+            const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
+            existing.push({
+              id: ticketId,
+              title,
+              type,
+              price: grandTotal,
+              quantity,
+              date,
+              time,
+              location,
+              image,
+              purchasedAt: new Date().toISOString(),
+              phone,
+            });
+            localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
+          } catch {}
+          setTimeout(() => setStep("confirmed"), 300);
+          return 100;
+        }
+        return p + 4;
+      });
+    }, 120);
+    return () => clearInterval(interval);
+  }, [step, ticketId, title, type, grandTotal, quantity, date, time, location, image, phone]);
+
+  const validatePhone = (val: string) => {
+    const cleaned = val.replace(/\s/g, "");
+    if (!cleaned) return "Phone number is required";
+    if (!/^(07|01|\+2547|\+2541|2547|2541)\d{7,8}$/.test(cleaned)) {
+      return "Enter a valid Kenyan phone number (e.g. 0712345678)";
     }
-  }, []);
-
-  // --- NEW: 10:1 CONVERSION LOGIC ---
-  // Rate: 10 Coins = 1 KES Discount
-  const coinBalance = user?.coins || 0;
-  const maxPossibleDiscount = Math.floor(coinBalance / 10); // e.g., 500 coins -> 50 KES
-  
-  // Cap the discount: Cannot exceed total bill
-  const actualDiscount = Math.min(maxPossibleDiscount, grossTotal);
-  
-  // Determine final values based on toggle
-  const appliedDiscount = useCoins ? actualDiscount : 0;
-  const coinsToDeduct = appliedDiscount * 10; // e.g., 50 KES discount -> deduct 500 coins
-  const finalTotal = grossTotal - appliedDiscount;
-
-  const [status, setStatus] = useState("idle");
-  const [timeLeft, setTimeLeft] = useState(30);
-  const [generatedTicketId, setGeneratedTicketId] = useState("");
-  
-  // VALIDATION STATE
-  const [holderName, setHolderName] = useState("");
-  const [isNameTouched, setIsNameTouched] = useState(false);
-  const isNameValid = holderName.trim().length >= 8;
-
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [isPhoneTouched, setIsPhoneTouched] = useState(false);
-  const isPhoneValid = phoneNumber.replace(/\D/g,'').length >= 10;
-
-  const handlePayment = () => {
-    if (!isNameValid || !isPhoneValid) return;
-
-    setStatus("processing");
-    setTimeout(() => setStatus("waiting_for_pin"), 1500);
+    return "";
   };
 
-  useEffect(() => {
-    if (status === "waiting_for_pin") {
-      const timer = setInterval(() => setTimeLeft((p) => (p > 0 ? p - 1 : 0)), 1000);
-      const successTrigger = setTimeout(() => {
-        
-        // --- 1. GENERATE TICKET ---
-        const ticketId = "T-" + Math.floor(1000 + Math.random() * 9000);
-        setGeneratedTicketId(ticketId);
+  const handlePay = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const err = validatePhone(phone);
+    if (err) { setPhoneError(err); return; }
+    setPhoneError("");
+    setStep("waiting");
+  };
 
-        const newTicket = {
-            id: ticketId,
-            eventTitle,
-            ticketType,
-            date,
-            location,
-            image,
-            holderName: holderName,
-            phoneNumber: phoneNumber,
-            status: "valid",
-            purchaseDate: new Date().toLocaleDateString()
-        };
-
-        const soldTickets = JSON.parse(localStorage.getItem("nene_sold_tickets") || "[]");
-        soldTickets.push(newTicket);
-        localStorage.setItem("nene_sold_tickets", JSON.stringify(soldTickets));
-
-        // --- 2. UPDATE LOYALTY POINTS (Earn + Burn) ---
-        if (user) {
-            // Earn: 10 Coins for every 100 KES spent (on final total)
-            const earned = Math.floor(finalTotal / 10);
-            setCoinsEarned(earned);
-
-            // Calculate new balance: (Current - Used) + Earned
-            const currentCoins = user.coins || 0;
-            const newBalance = currentCoins - coinsToDeduct + earned;
-
-            const updatedUser = { ...user, coins: newBalance };
-            localStorage.setItem("nene_user_profile", JSON.stringify(updatedUser));
-            setUser(updatedUser);
-        }
-
-        setStatus("success");
-      }, 5000);
-      return () => { clearInterval(timer); clearTimeout(successTrigger); };
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
-  const ticketUrl = `/tickets?title=${encodeURIComponent(eventTitle)}&type=${encodeURIComponent(ticketType)}&image=${encodeURIComponent(image)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}&location=${encodeURIComponent(location)}&quantity=${quantity}&id=${generatedTicketId}&holder=${encodeURIComponent(holderName)}`;
-
-  if (status === "success") {
+  if (step === "confirmed") {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white p-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://media.giphy.com/media/26tOZ42Mg6pbTUPDa/giphy.gif')] opacity-10 bg-cover pointer-events-none"></div>
-        
-        <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="bg-white/10 backdrop-blur-xl border border-white/10 p-8 rounded-2xl text-center max-w-md w-full relative z-10">
-          <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/50"><CheckCircle className="w-10 h-10 text-white" /></div>
-          <h2 className="text-3xl font-bold mb-2">Payment Confirmed!</h2>
-          <p className="text-gray-300 mb-6">Ticket sent to <span className="text-white font-bold">{phoneNumber}</span>.</p>
-          
-          <div className="bg-gradient-to-r from-yellow-600 to-yellow-800 p-4 rounded-xl mb-8 border border-yellow-400/30 transform hover:scale-105 transition duration-500">
-            <div className="flex items-center justify-center gap-2 mb-1">
-                <Trophy className="w-5 h-5 text-yellow-200" />
-                <span className="font-bold text-yellow-100 uppercase tracking-widest text-xs">Level Up!</span>
+      <div className="min-h-screen bg-[#050511] text-white flex flex-col items-center justify-center px-4 py-24">
+        <div className="w-full max-w-md text-center">
+          {/* Ticket card */}
+          <div className="relative bg-white/5 border border-white/10 rounded-3xl overflow-hidden mb-8">
+            {image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={image} alt={title} className="w-full h-36 object-cover opacity-60" />
+            )}
+            <div className="absolute top-0 inset-x-0 h-36 bg-gradient-to-b from-transparent to-[#050511]" />
+
+            {/* Success icon */}
+            <div className="relative -mt-8 flex justify-center">
+              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-xl shadow-green-500/40">
+                <CheckCircle2 className="w-8 h-8 text-white" />
+              </div>
             </div>
-            <div className="text-3xl font-bold text-white mb-1">+{coinsEarned} Coins</div>
-            <p className="text-yellow-200/80 text-xs">New Balance: {user?.coins} NeneCoins</p>
+
+            <div className="px-6 pt-4 pb-6">
+              <p className="text-green-400 font-bold text-sm mb-1">Payment Confirmed!</p>
+              <h2 className="text-xl font-bold mb-4">{title}</h2>
+
+              <div className="grid grid-cols-2 gap-3 text-sm mb-6">
+                <div className="bg-black/30 rounded-xl p-3 text-left">
+                  <p className="text-gray-500 text-xs mb-1">Ticket Type</p>
+                  <p className="font-bold capitalize">{type}</p>
+                </div>
+                <div className="bg-black/30 rounded-xl p-3 text-left">
+                  <p className="text-gray-500 text-xs mb-1">Quantity</p>
+                  <p className="font-bold">{quantity} ticket{quantity > 1 ? "s" : ""}</p>
+                </div>
+                <div className="bg-black/30 rounded-xl p-3 text-left">
+                  <p className="text-gray-500 text-xs mb-1">Date</p>
+                  <p className="font-bold">{date}</p>
+                </div>
+                <div className="bg-black/30 rounded-xl p-3 text-left">
+                  <p className="text-gray-500 text-xs mb-1">Amount Paid</p>
+                  <p className="font-bold text-green-400">KES {grandTotal.toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Dashed divider */}
+              <div className="flex items-center gap-2 my-4">
+                <div className="flex-1 border-t border-dashed border-white/10" />
+                <Ticket className="w-4 h-4 text-gray-600" />
+                <div className="flex-1 border-t border-dashed border-white/10" />
+              </div>
+
+              {/* Ticket ID */}
+              <p className="text-xs text-gray-500 mb-1">Ticket Reference</p>
+              <p className="text-2xl font-mono font-bold tracking-widest text-white">{ticketId}</p>
+              <p className="text-xs text-gray-600 mt-1">Show this at the venue gate</p>
+            </div>
           </div>
 
-          <Link href={ticketUrl}>
-            <button className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition">
-                View Your Ticket
-            </button>
-          </Link>
-        </motion.div>
+          <p className="text-gray-400 text-sm mb-6">
+            A confirmation has been sent to your M-Pesa and email. Keep your ticket reference safe.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            <Link href="/tickets">
+              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2">
+                <Ticket className="w-4 h-4" /> View My Tickets
+              </button>
+            </Link>
+            <Link href="/events">
+              <button className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3.5 rounded-xl transition">
+                Browse More Events
+              </button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "waiting") {
+    return (
+      <div className="min-h-screen bg-[#050511] text-white flex flex-col items-center justify-center px-4 py-24">
+        <div className="w-full max-w-sm text-center">
+          <div className="w-20 h-20 rounded-full border-4 border-blue-500/20 flex items-center justify-center mx-auto mb-6 relative">
+            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin" style={{ animationDuration: "0.8s" }} />
+          </div>
+          <h2 className="text-xl font-bold mb-2">Check Your Phone</h2>
+          <p className="text-gray-400 mb-2">
+            An M-Pesa prompt has been sent to <span className="text-white font-bold">{phone}</span>.
+          </p>
+          <p className="text-gray-500 text-sm mb-8">Enter your M-Pesa PIN to complete the payment.</p>
+
+          {/* Progress bar */}
+          <div className="w-full bg-white/10 rounded-full h-1.5 mb-2">
+            <div
+              className="bg-blue-500 h-1.5 rounded-full transition-all duration-100"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-600">Waiting for confirmation…</p>
+
+          <div className="mt-8 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-left">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-yellow-400 font-bold text-sm">Don&apos;t close this page</p>
+                <p className="text-yellow-200/60 text-xs mt-1">
+                  Keep this tab open until you receive the M-Pesa confirmation SMS.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
-      <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-between bg-black relative overflow-hidden text-white">
-        <div className="relative z-10">
-            <Link href="/" className="text-gray-400 hover:text-white flex items-center gap-2 mb-8 text-sm font-bold uppercase">← Cancel</Link>
-            <h1 className="text-4xl font-bold mb-2">Order Summary</h1>
-            <p className="text-gray-400 mb-8">Review your order for <span className="text-white font-bold">{eventTitle}</span>.</p>
-            
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
-                <div className="flex justify-between items-center pb-4 border-b border-white/10">
-                    <div><h3 className="font-bold text-lg">{ticketType} <span className="text-blue-400">x {quantity}</span></h3><p className="text-sm text-gray-400">@{ticketPrice.toLocaleString()} each</p></div>
-                    <span className="font-bold">KES {subTotal.toLocaleString()}</span>
-                </div>
-                
-                {useCoins && (
-                    <div className="flex justify-between items-center text-yellow-400 animate-pulse bg-yellow-400/10 p-2 rounded-lg -mx-2">
-                        <span className="flex items-center gap-2 text-sm font-bold"><Coins className="w-4 h-4" /> Loyalty Discount</span>
-                        <span className="font-bold">- KES {appliedDiscount.toLocaleString()}</span>
-                    </div>
-                )}
+    <div className="min-h-screen bg-[#050511] text-white pt-24 pb-16">
+      <div className="container mx-auto px-4 max-w-2xl">
+        {/* Back */}
+        <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm font-bold mb-8 transition">
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
 
-                <div className="flex justify-between items-center pt-4 text-xl font-bold text-blue-400">
-                    <span>Total Due</span>
-                    <span>KES {finalTotal.toLocaleString()}</span>
-                </div>
+        <h1 className="text-2xl font-bold mb-8">
+          {step === "summary" ? "Order Summary" : "Enter M-Pesa Number"}
+        </h1>
+
+        {/* Step indicator */}
+        <div className="flex items-center gap-2 mb-8">
+          {["summary", "phone"].map((s, i) => (
+            <div key={s} className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                step === s ? "bg-blue-600 text-white" : i < ["summary", "phone"].indexOf(step) ? "bg-green-500 text-white" : "bg-white/10 text-gray-500"
+              }`}>
+                {i < ["summary", "phone"].indexOf(step) ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
+              </div>
+              <span className={`text-xs font-bold capitalize hidden sm:block ${step === s ? "text-white" : "text-gray-500"}`}>
+                {s === "summary" ? "Review" : "Payment"}
+              </span>
+              {i < 1 && <ChevronRight className="w-4 h-4 text-gray-600" />}
             </div>
+          ))}
         </div>
-      </div>
 
-      <div className="w-full md:w-1/2 bg-white text-black p-8 md:p-12 flex items-center justify-center">
-        <div className="max-w-md w-full space-y-6">
-            {status === "waiting_for_pin" ? (
-                <div className="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-6 text-center">
-                    <h2 className="text-xl font-bold text-yellow-900 mb-2">Check your Phone</h2>
-                    <p className="text-sm text-yellow-700 mb-6">Enter PIN to pay KES {finalTotal.toLocaleString()}.</p>
-                    <div className="text-2xl font-mono font-bold text-yellow-600">00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}</div>
+        {step === "summary" && (
+          <div className="space-y-5">
+            {/* Event card */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+              {image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={image} alt={title} className="w-full h-36 object-cover" />
+              )}
+              <div className="p-5">
+                <p className="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1 capitalize">{type} Ticket</p>
+                <h2 className="text-xl font-bold mb-3">{title}</h2>
+                <div className="flex flex-col gap-1.5 text-sm text-gray-400">
+                  <span className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-gray-600" /> {date} at {time}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-gray-600" /> {location}
+                  </span>
                 </div>
-            ) : (
-                <>
-                    <div><h2 className="text-2xl font-bold mb-2">Checkout</h2><p className="text-gray-500">Complete your purchase details.</p></div>
-                    
-                    {/* NAME INPUT */}
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Ticket Holder Name <span className="text-red-500">*</span></label>
-                        <div className="relative">
-                            <input 
-                                type="text" 
-                                value={holderName}
-                                onChange={(e) => { setHolderName(e.target.value); setIsNameTouched(true); }}
-                                placeholder="Full Name (e.g. Kelly Munene)" 
-                                className={`w-full bg-gray-100 border rounded-xl px-4 py-3 pl-10 text-lg outline-none transition ${isNameTouched && !isNameValid ? 'border-red-500 bg-red-50' : isNameValid ? 'border-green-500 bg-green-50' : 'border-gray-200 focus:border-blue-500'}`} 
-                            />
-                            <User className={`w-5 h-5 absolute left-3 top-3.5 ${isNameTouched && !isNameValid ? 'text-red-500' : 'text-gray-400'}`} />
-                        </div>
-                        {isNameTouched && !isNameValid && <p className="text-xs text-red-500 mt-2 flex items-center gap-1 font-bold"><AlertCircle className="w-3 h-3" /> Name must be at least 8 characters.</p>}
-                    </div>
+              </div>
+            </div>
 
-                    {/* LOYALTY SECTION (UPDATED UI) */}
-                    {user && (user.coins || 0) > 0 && (
-                        <div className="bg-gradient-to-r from-gray-900 to-black text-white p-4 rounded-xl shadow-lg border border-gray-800">
-                            <div className="flex justify-between items-start mb-3">
-                                <div>
-                                    <div className="flex items-center gap-2 text-yellow-400 font-bold mb-1">
-                                        <Sparkles className="w-4 h-4" /> Redeem NeneCoins
-                                    </div>
-                                    <div className="text-xs text-gray-400 flex items-center gap-1">
-                                        <Info className="w-3 h-3" /> Rate: 10 Coins = 1 KES
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="font-bold text-lg">{user.coins} Coins</div>
-                                    <div className="text-xs text-green-400">Value: KES {maxPossibleDiscount}</div>
-                                </div>
-                            </div>
+            {/* Price breakdown */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">{quantity} × {type} ticket{quantity > 1 ? "s" : ""}</span>
+                <span className="font-bold">KES {total.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-gray-500">
+                <span>Service fee (3%)</span>
+                <span>KES {serviceFee.toLocaleString()}</span>
+              </div>
+              <div className="border-t border-white/10 pt-3 flex justify-between">
+                <span className="font-bold">Total</span>
+                <span className="text-xl font-bold text-blue-400">KES {grandTotal.toLocaleString()}</span>
+              </div>
+            </div>
 
-                            <div className="flex items-center justify-between bg-white/10 p-3 rounded-lg">
-                                <span className="text-sm font-bold text-gray-300">Apply Discount?</span>
-                                <button 
-                                    onClick={() => setUseCoins(!useCoins)}
-                                    className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${useCoins ? 'bg-green-500' : 'bg-gray-600'}`}
-                                >
-                                    <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${useCoins ? 'translate-x-6' : 'translate-x-0'}`} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
+            <button
+              onClick={() => setStep("phone")}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
+            >
+              Continue to Payment <ChevronRight className="w-4 h-4" />
+            </button>
 
-                    <div className="border-2 border-green-500 bg-green-50 rounded-xl p-4 flex items-center justify-between mb-4">
-  <div className="flex items-center gap-3">
-    <div className="w-9 h-9 bg-[#00A651] rounded-lg flex items-center justify-center shadow">
-      <span className="text-white text-sm font-black">M</span>
-    </div>
-    <div>
-      <div className="font-bold text-green-900">M-Pesa Express</div>
-      <div className="text-xs text-green-700">STK push sent to your phone</div>
-    </div>
-  </div>
-  <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  </div>
-</div>
-                        
-                        {/* PHONE INPUT */}
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">M-Pesa Number <span className="text-red-500">*</span></label>
-                            <div className="relative">
-                                <input 
-                                    type="tel"
-                                    value={phoneNumber}
-                                    onChange={(e) => { setPhoneNumber(e.target.value); setIsPhoneTouched(true); }}
-                                    placeholder="07XX XXX XXX" 
-                                    className={`w-full bg-gray-100 border rounded-xl px-4 py-3 pl-10 text-lg font-mono outline-none transition ${isPhoneTouched && !isPhoneValid ? 'border-red-500 bg-red-50' : isPhoneValid ? 'border-green-500 bg-green-50' : 'border-gray-200 focus:border-green-500'}`}
-                                />
-                                <Phone className={`w-5 h-5 absolute left-3 top-3.5 ${isPhoneTouched && !isPhoneValid ? 'text-red-500' : 'text-gray-400'}`} />
-                            </div>
-                            {isPhoneTouched && !isPhoneValid && <p className="text-xs text-red-500 mt-2 font-bold">Please enter a valid phone number.</p>}
-                        </div>
-                    
-                    <button 
-                        onClick={handlePayment} 
-                        disabled={status === "processing" || !isNameValid || !isPhoneValid} 
-                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition shadow-lg shadow-green-600/20"
-                    >
-                        {status === "processing" ? <Loader2 className="animate-spin" /> : <><Lock className="w-4 h-4" /> Pay KES {finalTotal.toLocaleString()}</>}
-                    </button>
-        {/* Security Trust Row */}
-<div className="flex items-center justify-center gap-4 pt-2 flex-wrap">
-  <div className="flex items-center gap-1 text-gray-400 text-xs">
-    <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-    </svg>
-    256-bit SSL
-  </div>
-  <div className="flex items-center gap-1.5">
-    <div className="w-4 h-4 bg-[#00A651] rounded-full flex items-center justify-center">
-      <span className="text-white text-[7px] font-black">M</span>
-    </div>
-    <span className="text-xs text-gray-500 font-bold">M-Pesa</span>
-  </div>
-  <div>
-    <span className="bg-[#1A1F71] text-white px-1.5 py-0.5 rounded text-[9px] font-black italic">VISA</span>
-  </div>
-  <div className="flex items-center gap-1">
-    <div className="flex -space-x-1">
-      <div className="w-3.5 h-3.5 rounded-full bg-[#EB001B]"></div>
-      <div className="w-3.5 h-3.5 rounded-full bg-[#F79E1B]"></div>
-    </div>
-    <span className="text-xs text-gray-500 font-bold ml-1">Mastercard</span>
-  </div>
-</div>
-                </>
-            )}
-        </div>
+            <div className="flex items-center justify-center gap-2 text-xs text-gray-600">
+              <Shield className="w-3.5 h-3.5" /> Secured by M-Pesa · 256-bit encryption
+            </div>
+          </div>
+        )}
+
+        {step === "phone" && (
+          <div className="space-y-5">
+            {/* Order recap */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex items-center justify-between text-sm">
+              <div>
+                <p className="text-gray-400">{quantity} × {type} · {title}</p>
+                <p className="font-bold text-white text-lg mt-0.5">KES {grandTotal.toLocaleString()}</p>
+              </div>
+              <button onClick={() => setStep("summary")} className="text-blue-400 hover:underline text-xs font-bold">
+                Edit
+              </button>
+            </div>
+
+            <form onSubmit={handlePay} className="space-y-5">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 bg-green-600/20 rounded-xl flex items-center justify-center">
+                    <Phone className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold">M-Pesa STK Push</h3>
+                    <p className="text-xs text-gray-500">We&apos;ll send a prompt to your phone</p>
+                  </div>
+                </div>
+
+                <label className="block text-sm font-bold text-gray-300 mb-2">
+                  M-Pesa Phone Number
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
+                  placeholder="0712 345 678"
+                  className={`w-full bg-black/40 border rounded-xl px-4 py-3.5 text-white placeholder:text-gray-600 focus:outline-none transition text-lg tracking-wide ${
+                    phoneError ? "border-red-500 focus:border-red-500" : "border-white/10 focus:border-blue-500"
+                  }`}
+                />
+                {phoneError && (
+                  <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> {phoneError}
+                  </p>
+                )}
+                <p className="text-xs text-gray-600 mt-3">
+                  After clicking Pay, an M-Pesa prompt will appear on your phone. Enter your PIN to complete payment.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 text-lg"
+              >
+                <Phone className="w-5 h-5" /> Pay KES {grandTotal.toLocaleString()}
+              </button>
+            </form>
+
+            <div className="flex items-center justify-center gap-2 text-xs text-gray-600">
+              <Shield className="w-3.5 h-3.5" /> Your PIN is never shared with us
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export default function CheckoutPage() {
-  return <Suspense fallback={<div>Loading...</div>}><CheckoutContent /></Suspense>;
+  return (
+    <main className="min-h-screen bg-[#050511] text-white">
+      <Navbar />
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        </div>
+      }>
+        <CheckoutContent />
+      </Suspense>
+    </main>
+  );
 }

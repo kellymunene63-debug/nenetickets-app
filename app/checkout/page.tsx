@@ -10,7 +10,7 @@ import {
   AlertCircle, Tag, X, CreditCard, Smartphone, MessageCircle, Info
 } from "lucide-react";
 
-// ── Paystack inline types ────────────────────────────────────────────────────
+// -- Paystack inline types --
 declare global {
   interface Window {
     PaystackPop: {
@@ -107,6 +107,7 @@ function CheckoutContent() {
   const getWhatsAppUrl = (id: string) => {
     const msg = encodeURIComponent(buildWhatsAppMessage(id));
     if (phone.trim()) {
+      // Normalise Kenyan numbers: 07xx → 2547xx, +254 → 254
       const digits = phone.replace(/\D/g, "");
       const normalised = digits.startsWith("0") ? `254${digits.slice(1)}` : digits.startsWith("254") ? digits : `254${digits}`;
       return `https://wa.me/${normalised}?text=${msg}`;
@@ -149,6 +150,7 @@ function CheckoutContent() {
     setStep("paying");
 
     try {
+      // Verify with our backend
       const res  = await fetch(`/api/paystack/verify/${reference}`);
       const data = await res.json() as { paid: boolean };
 
@@ -158,6 +160,7 @@ function CheckoutContent() {
         return;
       }
 
+      // Save ticket to localStorage
       const ticket = {
         id: ticketId,
         title, type, price: grandTotal, quantity,
@@ -172,6 +175,7 @@ function CheckoutContent() {
       setConfirmedRef(reference);
       setStep("confirmed");
 
+      // Send confirmation email (fire-and-forget — never blocks checkout)
       fetch("/api/email/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -191,6 +195,7 @@ function CheckoutContent() {
     }
   }, [ticketId, title, type, grandTotal, quantity, date, time, location, image, email]);
 
+  // For free tickets — skip Paystack, generate ticket directly
   const claimFreeTicket = useCallback(() => {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setEmailError("Enter a valid email address");
@@ -215,6 +220,7 @@ function CheckoutContent() {
     setConfirmedRef(freeRef);
     setStep("confirmed");
 
+    // Send confirmation email
     fetch("/api/email/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -247,13 +253,15 @@ function CheckoutContent() {
     const handler = window.PaystackPop.setup({
       key: publicKey,
       email,
-      amount: grandTotal * 100,
+      amount: grandTotal * 100, // kobo
       currency: "KES",
       ref: `NENE-${ticketId}-${Date.now()}`,
       metadata: {
         title, type, quantity, date, location, promoCode, eventId,
       },
-      onClose: () => {},
+      onClose: () => {
+        // user closed the popup without paying — do nothing
+      },
       callback: (response) => {
         handlePaymentSuccess(response.reference);
       },
@@ -262,7 +270,7 @@ function CheckoutContent() {
     handler.openIframe();
   };
 
-  // ── Confirmed screen ─────────────────────────────────────────────────────
+  // -- Confirmed screen --
   if (step === "confirmed") {
     return (
       <div className="min-h-screen bg-[#050511] text-white flex flex-col items-center justify-center px-4 py-24">
@@ -315,6 +323,7 @@ function CheckoutContent() {
                 <p className="text-xs text-gray-600 mt-1 font-mono">Paystack ref: {confirmedRef}</p>
               )}
 
+              {/* Email sent indicator */}
               <div className="mt-4">
                 {emailSent === null && (
                   <p className="text-xs text-gray-600 flex items-center justify-center gap-1.5">
@@ -336,7 +345,8 @@ function CheckoutContent() {
           </div>
 
           <div className="flex flex-col gap-3">
-            
+            {/* WhatsApp CTA — primary action */}
+            <a
               href={getWhatsAppUrl(ticketId)}
               target="_blank"
               rel="noopener noreferrer"
@@ -362,7 +372,7 @@ function CheckoutContent() {
     );
   }
 
-  // ── Paying / verifying screen ────────────────────────────────────────────
+  // -- Paying / verifying screen --
   if (step === "paying") {
     return (
       <div className="min-h-screen bg-[#050511] text-white flex flex-col items-center justify-center px-4 py-24">
@@ -375,7 +385,7 @@ function CheckoutContent() {
     );
   }
 
-  // ── Summary + pay screen ─────────────────────────────────────────────────
+  // -- Summary + pay screen --
   return (
     <div className="min-h-screen bg-[#050511] text-white pt-24 pb-16">
       <div className="container mx-auto px-4 max-w-xl">

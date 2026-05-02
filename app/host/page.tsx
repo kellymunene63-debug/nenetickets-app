@@ -88,6 +88,7 @@ const STOCK_IMAGES = [
   { label: "Art Exhibition", value: "https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=2079" },
   { label: "Nightlife / Club", value: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=2070" },
   { label: "Tech / Startup", value: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=2070" },
+  { label: "Adventure / Outdoors", value: "https://images.unsplash.com/photo-1551632811-561732d1e306?q=80&w=2070" },
 ];
 
 export default function HostPage() {
@@ -1327,7 +1328,7 @@ export default function HostPage() {
                   <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Category</label>
                   <div className="relative">
                     <select name="category" value={formData.category} onChange={handleChange} className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer">
-                      {["Music", "Sports", "Business", "Arts", "Tech", "Nightlife", "Food & Drink", "Charity"].map((cat) => (
+                      {["Music", "Sports", "Business", "Arts", "Tech", "Nightlife", "Food & Drink", "Charity", "Adventure"].map((cat) => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>

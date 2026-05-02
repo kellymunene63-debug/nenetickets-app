@@ -31,8 +31,7 @@ type ScanMode  = "manual" | "camera";
 
 declare global {
   interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Html5Qrcode: any;
+    Html5Qrcode: any; // loaded from CDN at runtime
   }
 }
 
@@ -79,8 +78,7 @@ export default function ValidatorPage() {
   const [flashColor, setFlashColor]   = useState("");
 
   const inputRef    = useRef<HTMLInputElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const scannerRef  = useRef<any>(null);
+  const scannerRef  = useRef<any>(null); // html5-qrcode instance
   const scanLockRef = useRef(false); // prevent double-scans
 
   // Load html5-qrcode from CDN

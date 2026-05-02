@@ -269,47 +269,54 @@ export default function HostPage() {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
-    if (res.ok) {
-      setMyEvents((prev) => prev.filter((e) => e.id !== eventId));
-    }
+    // Optimistic update — remove immediately so UI feels instant
     setDeleteConfirm(null);
+    setMyEvents((prev) => prev.filter((e) => e.id !== eventId));
+    // Persist to Redis in the background
+    try {
+      await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+    } catch { /* silent — UI already updated */ }
   };
 
   const handleCancelEvent = async (eventId: string) => {
-    const res = await fetch(`/api/events/${eventId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cancelled: true, cancelReason }),
-    });
-    if (res.ok) {
-      setMyEvents((prev) =>
-        prev.map((e) =>
-          e.id === eventId
-            ? { ...e, cancelled: true, cancelReason, cancelledAt: new Date().toISOString() }
-            : e
-        )
-      );
-    }
+    // Optimistic update
     setCancelConfirm(null);
+    const reason = cancelReason;
     setCancelReason("");
+    setMyEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId
+          ? { ...e, cancelled: true, cancelReason: reason, cancelledAt: new Date().toISOString() }
+          : e
+      )
+    );
+    // Persist to Redis in the background
+    try {
+      await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelled: true, cancelReason: reason }),
+      });
+    } catch { /* silent */ }
   };
 
   const handleRestoreEvent = async (eventId: string) => {
-    const res = await fetch(`/api/events/${eventId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cancelled: false }),
-    });
-    if (res.ok) {
-      setMyEvents((prev) =>
-        prev.map((e) =>
-          e.id === eventId
-            ? { ...e, cancelled: false, cancelReason: "", cancelledAt: null }
-            : e
-        )
-      );
-    }
+    // Optimistic update
+    setMyEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId
+          ? { ...e, cancelled: false, cancelReason: "", cancelledAt: null }
+          : e
+      )
+    );
+    // Persist to Redis in the background
+    try {
+      await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelled: false }),
+      });
+    } catch { /* silent */ }
   };
 
   const startEditEvent = (event: OrganizerEvent) => {

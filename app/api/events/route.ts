@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 const KEY = "nene:events";
 
 // ── Upstash Redis helpers (plain fetch — no package needed) ──────────────────

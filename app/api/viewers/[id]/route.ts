@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "edge";
+
 const visitMap = new Map<string, number[]>();
 const WINDOW_MS = 5 * 60 * 1000;
 

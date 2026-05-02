@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import EventCard from "../home/EventCard";
 import Link from "next/link";
 import { Filter, Search, SlidersHorizontal, X, ChevronDown, Calendar, MapPin, Zap } from "lucide-react";
-import type { Event } from "../../libs/events";
+import type { Event } from "../../lib/events";
 
 const CATEGORIES = ["All", "Music", "Sports", "Business", "Arts", "Tech", "Nightlife"];
 
@@ -44,13 +44,27 @@ export default function EventsClient({ defaultEvents }: { defaultEvents: Event[]
   const [sortOpen, setSortOpen] = useState(false);
 
   useEffect(() => {
-    try {
-      const savedEvents = localStorage.getItem("nene_events");
-      if (savedEvents) {
-        const parsedEvents = JSON.parse(savedEvents);
-        setAllEvents([...parsedEvents, ...defaultEvents]);
-      }
-    } catch {}
+    // Fetch organizer-created events from the database (cross-browser)
+    fetch("/api/events")
+      .then((r) => r.json())
+      .then((hostedEvents: Event[]) => {
+        if (Array.isArray(hostedEvents) && hostedEvents.length > 0) {
+          // Merge: hosted events first, then default events (avoid duplicates by id)
+          const defaultIds = new Set(defaultEvents.map((e) => e.id));
+          const newHosted = hostedEvents.filter((e) => !defaultIds.has(e.id));
+          setAllEvents([...newHosted, ...defaultEvents]);
+        }
+      })
+      .catch(() => {
+        // Fallback to localStorage if API is down
+        try {
+          const saved = localStorage.getItem("nene_events");
+          if (saved) {
+            const parsed: Event[] = JSON.parse(saved);
+            setAllEvents([...parsed, ...defaultEvents]);
+          }
+        } catch { /* silent */ }
+      });
   }, [defaultEvents]);
 
   const maxPossiblePrice = useMemo(() => {

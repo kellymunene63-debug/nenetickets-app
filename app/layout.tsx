@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import NeneBot from "../components/shared/NeneBot";
 import Footer from "../components/shared/Footer";
+import PWARegister from "../components/PWARegister";
 
 const inter = Inter({ subsets: ["latin"] });
 

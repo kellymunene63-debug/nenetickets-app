@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "edge";
+
 const EVENTS_KEY = "nene:events";
 
 async function redisGet<T>(key: string): Promise<T | null> {

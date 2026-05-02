@@ -123,11 +123,20 @@ export default function HostPage() {
   const [authError, setAuthError] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
 
-  const loadDashboardData = useCallback((currentHost?: Host) => {
+  const loadDashboardData = useCallback(async (currentHost?: Host) => {
     const activeHost = currentHost ?? host;
     if (!activeHost) return;
 
-    const allEvents: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
+    // Fetch events from KV database (cross-browser)
+    let allEvents: OrganizerEvent[] = [];
+    try {
+      const res = await fetch("/api/events");
+      if (res.ok) allEvents = await res.json();
+    } catch {
+      // Fallback to localStorage if API is unavailable
+      allEvents = JSON.parse(localStorage.getItem("nene_events") || "[]");
+    }
+
     const allSold: any[] = JSON.parse(localStorage.getItem("nene_sold_tickets") || "[]");
 
     // Only show this organizer's events
@@ -253,10 +262,10 @@ export default function HostPage() {
     return event.tickets?.reduce((acc, t) => acc + (parseInt(t.capacity) || 0), 0) ?? 0;
   };
 
-  const handleDeleteEvent = (eventId: string) => {
-    const allEvents: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
-    const updated = allEvents.filter((ev) => ev.id !== eventId);
-    localStorage.setItem("nene_events", JSON.stringify(updated));
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+    } catch { /* silent */ }
     setDeleteConfirm(null);
     loadDashboardData();
   };
@@ -360,7 +369,7 @@ export default function HostPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!formData.title || !formData.date || !formData.location) return;
     setIsLoading(true);
 
@@ -375,34 +384,32 @@ export default function HostPage() {
         })
       : formData.date;
 
-    const allEvents: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
-
     if (editingEvent) {
-      // Update existing event
-      const idx = allEvents.findIndex((ev) => ev.id === editingEvent.id);
-      if (idx !== -1) {
-        allEvents[idx] = {
-          ...allEvents[idx],
-          title: formData.title,
-          description: formData.description,
-          date: formattedDate,
-          time: formData.time,
-          location: formData.location,
-          price: `KES ${lowestPrice.toLocaleString()}`,
-          image: formData.image,
-          category: formData.category,
-          tickets,
-        };
-      }
-      setTimeout(() => {
-        localStorage.setItem("nene_events", JSON.stringify(allEvents));
-        setPublishedId(editingEvent.id);
-        setIsLoading(false);
-        setIsPublished(true);
-        loadDashboardData();
-      }, 1200);
+      // Update existing event via API
+      const updates = {
+        title: formData.title,
+        description: formData.description,
+        date: formattedDate,
+        time: formData.time,
+        location: formData.location,
+        price: `KES ${lowestPrice.toLocaleString()}`,
+        image: formData.image,
+        category: formData.category,
+        tickets,
+      };
+      try {
+        await fetch(`/api/events/${editingEvent.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
+      } catch { /* silent */ }
+      setPublishedId(editingEvent.id);
+      setIsLoading(false);
+      setIsPublished(true);
+      loadDashboardData();
     } else {
-      // Create new event
+      // Create new event via API
       const id = Date.now().toString();
       const newEvent: OrganizerEvent = {
         id,
@@ -419,14 +426,17 @@ export default function HostPage() {
         organizerEmail: host?.email ?? "",
         createdAt: new Date().toISOString(),
       };
-      setTimeout(() => {
-        allEvents.unshift(newEvent);
-        localStorage.setItem("nene_events", JSON.stringify(allEvents));
-        setPublishedId(id);
-        setIsLoading(false);
-        setIsPublished(true);
-        loadDashboardData();
-      }, 1200);
+      try {
+        await fetch("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newEvent),
+        });
+      } catch { /* silent */ }
+      setPublishedId(id);
+      setIsLoading(false);
+      setIsPublished(true);
+      loadDashboardData();
     }
   };
 

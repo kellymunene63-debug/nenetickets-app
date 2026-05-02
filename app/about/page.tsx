@@ -1,5 +1,4 @@
 import Navbar from "../../components/shared/Navbar";
-import Footer from "../../components/shared/Footer";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { MapPin, Phone, Mail, ArrowRight, Zap, Shield, Users, Globe } from "lucide-react";
@@ -208,7 +207,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <Footer />
     </main>
   );
 }

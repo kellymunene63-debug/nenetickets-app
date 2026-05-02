@@ -32,6 +32,9 @@ interface OrganizerEvent {
   tickets: TicketType[];
   organizerEmail: string;
   createdAt: string;
+  cancelled?: boolean;
+  cancelReason?: string;
+  cancelledAt?: string | null;
 }
 
 interface Host {
@@ -109,6 +112,8 @@ export default function HostPage() {
   const [publishedId, setPublishedId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
   const [editingEvent, setEditingEvent] = useState<OrganizerEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<OrganizerEvent | null>(null);
   const [attendeeSearch, setAttendeeSearch] = useState("");
@@ -267,6 +272,30 @@ export default function HostPage() {
       await fetch(`/api/events/${eventId}`, { method: "DELETE" });
     } catch { /* silent */ }
     setDeleteConfirm(null);
+    loadDashboardData();
+  };
+
+  const handleCancelEvent = async (eventId: string) => {
+    try {
+      await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelled: true, cancelReason }),
+      });
+    } catch { /* silent */ }
+    setCancelConfirm(null);
+    setCancelReason("");
+    loadDashboardData();
+  };
+
+  const handleRestoreEvent = async (eventId: string) => {
+    try {
+      await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelled: false }),
+      });
+    } catch { /* silent */ }
     loadDashboardData();
   };
 
@@ -851,7 +880,9 @@ export default function HostPage() {
                             {revenue > 0 ? `KES ${revenue.toLocaleString()}` : <span className="text-gray-600">—</span>}
                           </td>
                           <td className="px-5 py-4">
-                            {isPast
+                            {event.cancelled
+                              ? <span className="bg-red-500/15 text-red-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><XCircle className="w-3 h-3" /> CANCELLED</span>
+                              : isPast
                               ? <span className="bg-white/10 text-gray-500 text-xs font-bold px-2 py-1 rounded-full">ENDED</span>
                               : <span className="bg-green-500/15 text-green-400 text-xs font-bold px-2 py-1 rounded-full">LIVE</span>
                             }
@@ -880,6 +911,15 @@ export default function HostPage() {
                                 <button onClick={() => startEditEvent(event)} className="text-gray-600 hover:text-yellow-400 transition p-1.5 rounded-lg hover:bg-yellow-500/10" title="Edit event">
                                   <Edit2 className="w-4 h-4" />
                                 </button>
+                                {event.cancelled ? (
+                                  <button onClick={() => handleRestoreEvent(event.id)} className="text-gray-600 hover:text-green-400 transition p-1.5 rounded-lg hover:bg-green-500/10" title="Restore event">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <button onClick={() => { setCancelConfirm(event.id); setCancelReason(""); }} className="text-gray-600 hover:text-orange-400 transition p-1.5 rounded-lg hover:bg-orange-500/10" title="Cancel event">
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                )}
                                 <button onClick={() => setDeleteConfirm(event.id)} className="text-gray-600 hover:text-red-400 transition p-1.5 rounded-lg hover:bg-red-500/10" title="Delete event">
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -905,6 +945,46 @@ export default function HostPage() {
           )}
           </>}
         </div>
+
+        {/* ── Cancel Event Modal ── */}
+        {cancelConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-orange-400" /> Cancel Event
+              </h3>
+              <p className="text-gray-400 text-sm mb-4">
+                This will mark the event as cancelled. Ticket holders will see a cancellation notice on the event page. You can restore the event at any time.
+              </p>
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Cancellation Reason <span className="text-gray-700 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="e.g. Venue unavailable, artist cancellation, weather conditions…"
+                  rows={3}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-orange-500 transition resize-none placeholder:text-gray-700"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleCancelEvent(cancelConfirm)}
+                  className="flex-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 py-3 rounded-xl font-bold transition"
+                >
+                  Confirm Cancel
+                </button>
+                <button
+                  onClick={() => { setCancelConfirm(null); setCancelReason(""); }}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 border border-white/10 py-3 rounded-xl font-bold transition"
+                >
+                  Keep Event
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     );
   }

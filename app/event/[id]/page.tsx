@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import {
   Calendar, MapPin, ArrowLeft, CheckCircle2, Minus, Plus, Share2,
-  Copy, Twitter, MessageCircle, Info, Eye, TrendingUp, AlertTriangle, Clock
+  Copy, Twitter, MessageCircle, Info, Eye, Clock, Tag
 } from "lucide-react";
 
 const EVENTS_DB: Record<string, {
@@ -61,6 +61,54 @@ const EVENTS_DB: Record<string, {
     description: "An exclusive evening celebrating East Africa's most exciting contemporary artists. Private gallery walk, artist talks, curated refreshments, and a live performance by Nairobi's premier string quartet.",
     category: "Arts", tag: "EXCLUSIVE",
   },
+  "7": {
+    title: "Nairobi International Gospel Fest",
+    image: "https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?q=80&w=2070",
+    date: "Aug 22, 2026", time: "4:00 PM", location: "KICC Grounds",
+    basePrice: 0, baseVipPrice: 2000,
+    description: "A powerful celebration of faith and music featuring Kenya's top gospel artists alongside international acts. Thousands gather annually at KICC Grounds for an evening of worship, praise, and community.",
+    category: "Music", tag: "FREE ENTRY",
+  },
+  "8": {
+    title: "Nairobi Marathon 2026",
+    image: "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?q=80&w=2070",
+    date: "Sep 06, 2026", time: "6:00 AM", location: "Uhuru Park",
+    basePrice: 1500, baseVipPrice: 4000,
+    description: "Kenya's premier road race through the heart of Nairobi. Choose from 5K, 10K, 21K, or full marathon distances. All proceeds support youth athletics programmes across the country.",
+    category: "Sports", tag: "POPULAR",
+  },
+  "9": {
+    title: "Africa Fintech Summit 2026",
+    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070",
+    date: "Sep 20, 2026", time: "8:30 AM", location: "Radisson Blu, Nairobi",
+    basePrice: 4500, baseVipPrice: 12000,
+    description: "Africa's premier fintech conference. Two days of panels, investor pitches, and workshops covering mobile money, DeFi, insurance tech, and regulatory frameworks.",
+    category: "Business", tag: "MUST ATTEND",
+  },
+  "10": {
+    title: "Kenya Developer Conference",
+    image: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=2070",
+    date: "Oct 03, 2026", time: "9:00 AM", location: "iHub, Nairobi",
+    basePrice: 500, baseVipPrice: 2500,
+    description: "A full day of talks, workshops, and networking for Kenya's developer community. Topics span AI/ML, cloud architecture, mobile development, and open source.",
+    category: "Tech", tag: "TRENDING",
+  },
+  "11": {
+    title: "Afrobeats Night: Lagos Meets Nairobi",
+    image: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=2070",
+    date: "Jun 28, 2026", time: "9:00 PM", location: "Alchemist Bar",
+    basePrice: 1200, baseVipPrice: 3500,
+    description: "A night where West African and East African rhythms collide. Nairobi's best Afrobeats DJs alongside a live guest performance from Lagos. The Alchemist transforms into the ultimate pan-African dance floor.",
+    category: "Nightlife", tag: "HOT NIGHT",
+  },
+  "12": {
+    title: "Rooftop Sundowner: Westlands",
+    image: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?q=80&w=2070",
+    date: "Jul 19, 2026", time: "5:30 PM", location: "Trademark Hotel",
+    basePrice: 800, baseVipPrice: 2000,
+    description: "Nairobi's most scenic rooftop party. Watch the sun set over the Westlands skyline with a cocktail in hand. Live acoustic set, curated DJ playlist, and a pop-up bar with exclusive craft cocktails.",
+    category: "Nightlife", tag: "VIBES ONLY",
+  },
 };
 
 function getDaysUntil(dateStr: string): number | null {
@@ -76,28 +124,38 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [selectedTicket, setSelectedTicket] = useState<"regular" | "vip">("regular");
   const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [viewers, setViewers] = useState(24);
-  const [isSurge, setIsSurge] = useState(false);
+  const [viewers, setViewers] = useState<number | null>(null);
 
   const daysUntil = event ? getDaysUntil(event.date) : null;
 
+  // Register this visit and then poll every 30s
   useEffect(() => {
-    const interval = setInterval(() => {
-      setViewers((prev) => {
-        const next = prev + Math.floor(Math.random() * 5) - 1;
-        return next > 10 ? next : 10;
-      });
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!event) return;
 
-  useEffect(() => {
-    setIsSurge(viewers > 40);
-  }, [viewers]);
+    const register = async () => {
+      try {
+        const res = await fetch(`/api/viewers/${params.id}`, { method: "POST" });
+        const data = await res.json() as { count: number };
+        setViewers(data.count);
+      } catch { /* silent */ }
+    };
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/viewers/${params.id}`);
+        const data = await res.json() as { count: number };
+        setViewers(data.count);
+      } catch { /* silent */ }
+    };
+
+    register();
+    const interval = setInterval(poll, 30_000);
+    return () => clearInterval(interval);
+  }, [params.id, event]);
 
   if (!event) {
     return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center flex-col gap-4">
+      <main className="min-h-screen bg-black text-white flex items-center justify-center flex-col gap-4 pt-20">
         <Navbar />
         <h2 className="text-2xl font-bold">Event not found</h2>
         <Link href="/events" className="text-blue-400 hover:underline">Browse all events</Link>
@@ -105,9 +163,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
     );
   }
 
-  const surgeMultiplier = isSurge ? 1.2 : 1;
-  const regularPrice = Math.round(event.basePrice * surgeMultiplier);
-  const vipPrice = Math.round(event.baseVipPrice * surgeMultiplier);
+  const regularPrice = event.basePrice;
+  const vipPrice = event.baseVipPrice;
   const currentPrice = selectedTicket === "regular" ? regularPrice : vipPrice;
   const totalPrice = currentPrice * quantity;
 
@@ -136,14 +193,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={event.image} alt={event.title} className="w-full h-full object-cover" />
 
-        <div className="absolute top-24 left-4 z-50 container mx-auto px-4">
+        <div className="absolute top-24 left-0 right-0 z-50 container mx-auto px-6">
           <Link href="/events" className="inline-flex items-center gap-2 bg-black/50 backdrop-blur-md px-4 py-2 rounded-full hover:bg-black/70 transition text-sm font-bold">
             <ArrowLeft className="w-4 h-4" /> All Events
           </Link>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 z-20 p-8 container mx-auto px-8">
-          {/* Countdown badge */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 container mx-auto px-6 pb-8">
           {daysUntil !== null && daysUntil >= 0 && (
             <div className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full mb-4 ${
               daysUntil <= 7 ? "bg-orange-500/90 text-white" : "bg-white/10 text-gray-300 border border-white/20"
@@ -153,7 +209,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
             </div>
           )}
           <span className="text-blue-400 text-sm font-bold uppercase tracking-widest block mb-2">{event.category}</span>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 max-w-2xl">{event.title}</h1>
+          <h1 className="text-3xl md:text-5xl font-bold mb-4 max-w-2xl leading-tight">{event.title}</h1>
           <div className="flex flex-col md:flex-row gap-3 md:gap-8 text-gray-300 font-medium text-sm">
             <span className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" /> {event.date} at {event.time}</span>
             <span className="flex items-center gap-2"><MapPin className="w-4 h-4 text-pink-400" /> {event.location}</span>
@@ -161,32 +217,33 @@ export default function EventPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-12 grid grid-cols-1 lg:grid-cols-3 gap-12">
+      <div className="container mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-5 gap-10">
 
-        {/* LEFT: Content */}
-        <div className="lg:col-span-2 space-y-10">
+        {/* LEFT: Content — 3 of 5 columns */}
+        <div className="lg:col-span-3 space-y-8">
 
-          {/* About */}
           <section>
             <h2 className="text-2xl font-bold mb-4">About the Event</h2>
             <p className="text-gray-400 text-lg leading-relaxed">{event.description}</p>
           </section>
 
-          {/* Live viewers alert */}
-          <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400">
-            <Eye className="w-5 h-5 flex-shrink-0 animate-pulse" />
-            <span className="font-bold">{viewers} people are viewing this right now</span>
-          </div>
+          {/* Live viewers */}
+          {viewers !== null && (
+            <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400">
+              <Eye className="w-5 h-5 flex-shrink-0 animate-pulse" />
+              <span className="font-bold">{viewers} {viewers === 1 ? "person is" : "people are"} viewing this right now</span>
+            </div>
+          )}
 
           {/* Venue map */}
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-8 overflow-hidden">
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 overflow-hidden">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-blue-500" /> Venue Map
               </h3>
               <div className="text-xs text-gray-500 flex gap-4 font-bold uppercase">
-                <span className="flex items-center gap-2"><div className="w-3 h-3 bg-pink-500 rounded-full" /> VIP</span>
-                <span className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded-full" /> Regular</span>
+                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-pink-500 rounded-full" /> VIP</span>
+                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-blue-500 rounded-full" /> Regular</span>
               </div>
             </div>
             <div className="relative w-full max-w-lg mx-auto">
@@ -228,24 +285,12 @@ export default function EventPage({ params }: { params: { id: string } }) {
           <ReviewSection />
         </div>
 
-        {/* RIGHT: Sticky sidebar */}
-        <div className="space-y-5 lg:sticky lg:top-24 h-fit">
+        {/* RIGHT: Sticky sidebar — 2 of 5 columns */}
+        <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-24 h-fit">
 
-          {/* Ticket selector card */}
+          {/* Ticket selector */}
           <div className="bg-white/5 border border-white/10 p-6 rounded-2xl shadow-xl">
-            {isSurge && (
-              <div className="mb-5 bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex items-start gap-3">
-                <div className="bg-yellow-500 p-1.5 rounded-lg text-black mt-0.5 flex-shrink-0">
-                  <TrendingUp className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-yellow-400 font-bold text-sm">High Demand — Prices Up 20%</h4>
-                  <p className="text-yellow-200/60 text-xs mt-1">Price will drop when demand normalises.</p>
-                </div>
-              </div>
-            )}
-
-            <h3 className="text-xl font-bold mb-5">Select Ticket</h3>
+            <h3 className="text-lg font-bold mb-4">Select Ticket</h3>
 
             {/* Regular */}
             <div
@@ -256,44 +301,46 @@ export default function EventPage({ params }: { params: { id: string } }) {
                   : "border-white/10 hover:border-white/30 hover:bg-white/5"
               }`}
             >
-              <div className="flex justify-between items-center">
-                <div>
+              <div className="flex justify-between items-center gap-3">
+                <div className="min-w-0">
                   <span className="font-bold block">Regular Admission</span>
                   <span className="text-xs text-gray-500">General access</span>
                 </div>
-                <div className="text-right">
-                  {isSurge && <span className="block text-xs text-gray-500 line-through">KES {event.basePrice.toLocaleString()}</span>}
-                  <span className={`font-bold ${isSurge ? "text-yellow-400" : "text-blue-400"}`}>
+                <div className="flex-shrink-0 flex items-center gap-2">
+                  <span className={`font-bold text-lg ${selectedTicket === "regular" ? "text-blue-400" : "text-white"}`}>
                     {event.basePrice === 0 ? "Free" : `KES ${regularPrice.toLocaleString()}`}
                   </span>
+                  {selectedTicket === "regular" && <CheckCircle2 className="text-blue-500 w-5 h-5 flex-shrink-0" />}
                 </div>
               </div>
-              {selectedTicket === "regular" && <CheckCircle2 className="absolute top-4 right-4 text-blue-500 w-5 h-5" />}
             </div>
 
             {/* VIP */}
             <div
               onClick={() => setSelectedTicket("vip")}
-              className={`mb-6 p-4 rounded-xl border cursor-pointer transition-all relative ${
+              className={`mb-5 p-4 rounded-xl border cursor-pointer transition-all relative ${
                 selectedTicket === "vip"
                   ? "border-pink-500 bg-pink-500/10"
                   : "border-white/10 hover:border-white/30 hover:bg-white/5"
               }`}
             >
-              <div className="absolute -top-3 left-4 bg-gradient-to-r from-pink-600 to-purple-600 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded text-white font-bold">
-                {event.tag}
-              </div>
-              <div className="flex justify-between items-center mt-1">
-                <div>
-                  <span className="font-bold text-lg block">VIP Experience</span>
+              <div className="flex justify-between items-center gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-bold">VIP Experience</span>
+                    <span className="bg-gradient-to-r from-pink-600 to-purple-600 text-[9px] uppercase tracking-wider px-2 py-0.5 rounded text-white font-bold flex-shrink-0">
+                      {event.tag}
+                    </span>
+                  </div>
                   <span className="text-xs text-gray-500">Front row + perks</span>
                 </div>
-                <div className="text-right">
-                  {isSurge && <span className="block text-xs text-gray-500 line-through">KES {event.baseVipPrice.toLocaleString()}</span>}
-                  <span className={`font-bold text-xl ${isSurge ? "text-yellow-400" : "text-pink-400"}`}>KES {vipPrice.toLocaleString()}</span>
+                <div className="flex-shrink-0 flex items-center gap-2">
+                  <span className={`font-bold text-lg ${selectedTicket === "vip" ? "text-pink-400" : "text-white"}`}>
+                    KES {vipPrice.toLocaleString()}
+                  </span>
+                  {selectedTicket === "vip" && <CheckCircle2 className="text-pink-500 w-5 h-5 flex-shrink-0" />}
                 </div>
               </div>
-              {selectedTicket === "vip" && <CheckCircle2 className="absolute top-4 right-4 text-pink-500 w-5 h-5" />}
             </div>
 
             {/* Quantity */}
@@ -302,34 +349,45 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 <span className="text-gray-400 font-bold text-sm block">Quantity</span>
                 <span className="text-xs text-gray-600">Max 10 per order</span>
               </div>
-              <div className="flex items-center gap-4">
-                <button onClick={() => handleQuantity("dec")} className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-40" disabled={quantity === 1}>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleQuantity("dec")}
+                  disabled={quantity === 1}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-30"
+                >
                   <Minus className="w-4 h-4" />
                 </button>
                 <span className="font-bold text-2xl w-8 text-center">{quantity}</span>
-                <button onClick={() => handleQuantity("inc")} className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-40" disabled={quantity === 10}>
+                <button
+                  onClick={() => handleQuantity("inc")}
+                  disabled={quantity === 10}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-30"
+                >
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Total & CTA */}
+            {/* Total */}
             <div className="flex justify-between items-center mb-4 text-sm">
               <span className="text-gray-400">{quantity} × {selectedTicket} ticket{quantity > 1 ? "s" : ""}</span>
-              <span className="font-bold text-lg">KES {totalPrice.toLocaleString()}</span>
+              <span className="font-bold text-lg">
+                {currentPrice === 0 ? "Free" : `KES ${totalPrice.toLocaleString()}`}
+              </span>
             </div>
 
             <Link href={checkoutUrl}>
-              <button className={`w-full text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 active:scale-95 ${
-                isSurge ? "bg-yellow-600 hover:bg-yellow-700 shadow-yellow-600/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20"
-              }`}>
-                {isSurge && <AlertTriangle className="w-5 h-5" />}
-                Pay KES {totalPrice.toLocaleString()} →
+              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 active:scale-95">
+                {currentPrice === 0 ? (
+                  <><Tag className="w-5 h-5" /> Reserve Free Ticket</>
+                ) : (
+                  <>Pay KES {totalPrice.toLocaleString()} →</>
+                )}
               </button>
             </Link>
 
             <p className="text-center text-xs text-gray-600 mt-3 flex items-center justify-center gap-1">
-              <span>🔒</span> Secure M-Pesa checkout
+              <span>🔒</span> Secured by Paystack
             </p>
           </div>
 

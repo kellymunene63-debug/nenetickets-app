@@ -6,7 +6,8 @@ import {
   Upload, CheckCircle2, DollarSign, Sparkles, Plus, Trash2, Tag,
   BarChart3, Users, ArrowLeft, LogOut, Eye, EyeOff, Lock,
   ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar,
-  ExternalLink, Edit2, MapPin, FileText, Hash, ChevronDown
+  ExternalLink, Edit2, MapPin, FileText, Hash, ChevronDown,
+  Download, Search, CheckCheck, Clock, Phone, Mail, UserCheck, XCircle, PieChart
 } from "lucide-react";
 import Link from "next/link";
 
@@ -38,6 +39,24 @@ interface Host {
   phone: string;
   password: string;
   joined: string;
+}
+
+interface SoldTicket {
+  id: string;
+  title: string;
+  eventTitle?: string;
+  type: string;
+  price: number;
+  quantity: number;
+  date: string;
+  time: string;
+  location: string;
+  image: string;
+  purchasedAt: string;
+  phone: string;
+  email?: string;
+  checkedIn?: boolean;
+  checkedInAt?: string;
 }
 
 const STOCK_IMAGES = [
@@ -72,6 +91,8 @@ export default function HostPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<OrganizerEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<OrganizerEvent | null>(null);
+  const [attendeeSearch, setAttendeeSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -236,6 +257,47 @@ export default function HostPage() {
     });
     setTickets([{ name: "Regular", price: "2500", capacity: "100" }]);
     setIsPublished(false);
+  };
+
+  const getAttendeesForEvent = (eventTitle: string): SoldTicket[] => {
+    return soldTickets.filter(
+      (t: SoldTicket) => t.title === eventTitle || t.eventTitle === eventTitle
+    );
+  };
+
+  const toggleCheckIn = (ticketId: string) => {
+    const all: SoldTicket[] = JSON.parse(localStorage.getItem("nene_sold_tickets") || "[]");
+    const idx = all.findIndex((t) => t.id === ticketId);
+    if (idx !== -1) {
+      all[idx].checkedIn = !all[idx].checkedIn;
+      all[idx].checkedInAt = all[idx].checkedIn ? new Date().toISOString() : undefined;
+      localStorage.setItem("nene_sold_tickets", JSON.stringify(all));
+      setSoldTickets([...all]);
+    }
+  };
+
+  const exportAttendeesCSV = (event: OrganizerEvent) => {
+    const attendees = getAttendeesForEvent(event.title);
+    const headers = ["Ticket ID", "Ticket Type", "Phone", "Email", "Quantity", "Price (KES)", "Purchased At", "Checked In", "Check-In Time"];
+    const rows = attendees.map((t: SoldTicket) => [
+      t.id,
+      t.type,
+      t.phone || "—",
+      t.email || "—",
+      t.quantity,
+      t.price,
+      new Date(t.purchasedAt).toLocaleString("en-KE"),
+      t.checkedIn ? "Yes" : "No",
+      t.checkedInAt ? new Date(t.checkedInAt).toLocaleString("en-KE") : "—",
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${event.title.replace(/\s+/g, "_")}_attendees.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handlePublish = () => {
@@ -587,8 +649,15 @@ export default function HostPage() {
                               </div>
                             ) : (
                               <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => { setSelectedEvent(event); setAttendeeSearch(""); setView("portal"); }}
+                                  className="text-gray-600 hover:text-purple-400 transition p-1.5 rounded-lg hover:bg-purple-500/10"
+                                  title="View attendees"
+                                >
+                                  <Users className="w-4 h-4" />
+                                </button>
                                 <Link href={`/event/${event.id}`} target="_blank">
-                                  <button className="text-gray-600 hover:text-blue-400 transition p-1.5 rounded-lg hover:bg-blue-500/10" title="View event">
+                                  <button className="text-gray-600 hover:text-blue-400 transition p-1.5 rounded-lg hover:bg-blue-500/10" title="View event page">
                                     <ExternalLink className="w-4 h-4" />
                                   </button>
                                 </Link>
@@ -616,6 +685,237 @@ export default function HostPage() {
               <button onClick={() => { resetCreateForm(); setView("create"); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition inline-flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Create First Event
               </button>
+            </div>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // ─── ORGANIZER PORTAL (per-event) ───────────────────────────────────────────
+  if (view === "portal" && selectedEvent) {
+    const attendees: SoldTicket[] = getAttendeesForEvent(selectedEvent.title);
+    const checkedInCount = attendees.filter((a) => a.checkedIn).length;
+
+    // Ticket type breakdown
+    const typeBreakdown: Record<string, { sold: number; revenue: number; capacity: number }> = {};
+    (selectedEvent.tickets ?? []).forEach((t) => {
+      typeBreakdown[t.name] = { sold: 0, revenue: 0, capacity: parseInt(t.capacity) || 0 };
+    });
+    attendees.forEach((a) => {
+      if (!typeBreakdown[a.type]) typeBreakdown[a.type] = { sold: 0, revenue: 0, capacity: 0 };
+      typeBreakdown[a.type].sold += a.quantity ?? 1;
+      typeBreakdown[a.type].revenue += a.price ?? 0;
+    });
+
+    const totalRevenue = attendees.reduce((s, a) => s + (a.price ?? 0), 0);
+    const totalCap = (selectedEvent.tickets ?? []).reduce((s, t) => s + (parseInt(t.capacity) || 0), 0);
+
+    const filtered = attendees.filter((a) => {
+      const q = attendeeSearch.toLowerCase();
+      return !q || a.id.toLowerCase().includes(q) || (a.phone || "").includes(q) || (a.email || "").toLowerCase().includes(q) || (a.type || "").toLowerCase().includes(q);
+    });
+
+    return (
+      <main className="min-h-screen bg-[#050511] text-white">
+        <Navbar />
+        <div className="container mx-auto px-4 py-24 max-w-5xl">
+
+          {/* Back */}
+          <button onClick={() => { setView("dashboard"); setSelectedEvent(null); }} className="mb-8 flex items-center gap-2 text-gray-400 hover:text-white transition font-bold text-sm">
+            <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+          </button>
+
+          {/* Event header */}
+          <div className="flex flex-col md:flex-row gap-5 items-start mb-10 bg-white/5 border border-white/10 rounded-2xl p-5 overflow-hidden">
+            <div className="w-full md:w-32 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-gray-800">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={selectedEvent.image} alt={selectedEvent.title} className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1">
+              <span className="text-blue-400 text-xs font-bold uppercase tracking-widest">{selectedEvent.category}</span>
+              <h1 className="text-2xl font-bold mt-1 mb-2">{selectedEvent.title}</h1>
+              <div className="flex flex-wrap gap-4 text-sm text-gray-400">
+                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-gray-600" />{selectedEvent.date}{selectedEvent.time && ` · ${selectedEvent.time}`}</span>
+                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-gray-600" />{selectedEvent.location}</span>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-shrink-0 flex-wrap">
+              <Link href={`/event/${selectedEvent.id}`} target="_blank">
+                <button className="flex items-center gap-1.5 text-xs font-bold bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded-xl transition">
+                  <ExternalLink className="w-3.5 h-3.5" /> View Page
+                </button>
+              </Link>
+              <button
+                onClick={() => exportAttendeesCSV(selectedEvent)}
+                className="flex items-center gap-1.5 text-xs font-bold bg-green-600/15 hover:bg-green-600/25 border border-green-600/25 text-green-400 px-3 py-2 rounded-xl transition"
+              >
+                <Download className="w-3.5 h-3.5" /> Export CSV
+              </button>
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Ticket className="w-3 h-3 text-blue-400" />Tickets Sold</p>
+              <p className="text-2xl font-bold">{attendees.length}</p>
+              {totalCap > 0 && <p className="text-xs text-gray-600 mt-0.5">of {totalCap} capacity</p>}
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><DollarSign className="w-3 h-3 text-green-400" />Revenue</p>
+              <p className="text-2xl font-bold">KES {totalRevenue.toLocaleString()}</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><UserCheck className="w-3 h-3 text-purple-400" />Checked In</p>
+              <p className="text-2xl font-bold">{checkedInCount}</p>
+              {attendees.length > 0 && <p className="text-xs text-gray-600 mt-0.5">{Math.round((checkedInCount / attendees.length) * 100)}% of attendees</p>}
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Clock className="w-3 h-3 text-orange-400" />Remaining</p>
+              <p className="text-2xl font-bold">{attendees.length - checkedInCount}</p>
+              <p className="text-xs text-gray-600 mt-0.5">not yet checked in</p>
+            </div>
+          </div>
+
+          {/* Check-in progress bar */}
+          {attendees.length > 0 && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold flex items-center gap-2"><UserCheck className="w-4 h-4 text-purple-400" />Check-in Progress</span>
+                <span className="text-sm font-bold text-purple-400">{checkedInCount} / {attendees.length}</span>
+              </div>
+              <div className="w-full bg-white/5 rounded-full h-3">
+                <div
+                  className="h-3 rounded-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-700"
+                  style={{ width: `${Math.round((checkedInCount / attendees.length) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-600 mt-2">{Math.round((checkedInCount / attendees.length) * 100)}% of ticket holders checked in</p>
+            </div>
+          )}
+
+          {/* Ticket type breakdown */}
+          {Object.keys(typeBreakdown).length > 0 && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-8">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4 flex items-center gap-2">
+                <PieChart className="w-4 h-4 text-blue-400" /> Ticket Type Breakdown
+              </h2>
+              <div className="space-y-3">
+                {Object.entries(typeBreakdown).map(([name, data]) => {
+                  const maxSold = Math.max(...Object.values(typeBreakdown).map((d) => d.sold), 1);
+                  const pct = data.capacity > 0
+                    ? Math.round((data.sold / data.capacity) * 100)
+                    : data.sold > 0 ? 100 : 0;
+                  return (
+                    <div key={name}>
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="font-bold text-gray-300">{name}</span>
+                        <div className="flex items-center gap-4 text-gray-500">
+                          <span>{data.sold}{data.capacity > 0 ? ` / ${data.capacity}` : ""} sold</span>
+                          {data.capacity > 0 && <span className={`font-bold ${pct >= 80 ? "text-red-400" : pct >= 50 ? "text-yellow-400" : "text-green-400"}`}>{pct}%</span>}
+                          <span className="text-white font-bold">{data.revenue > 0 ? `KES ${data.revenue.toLocaleString()}` : "—"}</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-white/5 rounded-full h-2">
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-blue-600 to-blue-400"
+                          style={{ width: `${data.capacity > 0 ? pct : Math.round((data.sold / Math.max(...Object.values(typeBreakdown).map(d => d.sold), 1)) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Attendees list */}
+          <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-400" /> Attendees
+              <span className="text-sm font-normal text-gray-500">({attendees.length})</span>
+            </h2>
+            <div className="relative flex-shrink-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                value={attendeeSearch}
+                onChange={(e) => setAttendeeSearch(e.target.value)}
+                placeholder="Search by ID, phone, type…"
+                className="bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-white outline-none focus:border-blue-500 transition w-64 placeholder:text-gray-700"
+              />
+            </div>
+          </div>
+
+          {attendees.length === 0 ? (
+            <div className="text-center py-20 bg-white/5 border border-dashed border-white/10 rounded-2xl">
+              <div className="text-4xl mb-3">🎟</div>
+              <h3 className="font-bold text-lg mb-1">No tickets sold yet</h3>
+              <p className="text-gray-500 text-sm">Share your event link to start selling tickets.</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 text-sm">No attendees match your search.</div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((attendee: SoldTicket) => (
+                <div key={attendee.id} className={`bg-white/5 border rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 transition ${attendee.checkedIn ? "border-green-500/20 bg-green-500/5" : "border-white/10 hover:border-white/20"}`}>
+                  {/* Left: ticket info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-blue-400 text-xs font-bold uppercase bg-blue-500/10 px-2 py-0.5 rounded-full">{attendee.type}</span>
+                      {attendee.checkedIn && (
+                        <span className="text-green-400 text-xs font-bold bg-green-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCheck className="w-3 h-3" /> Checked In
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-mono text-xs text-gray-500 mb-2">#{attendee.id}</p>
+                    <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+                      {attendee.phone && (
+                        <span className="flex items-center gap-1.5">
+                          <Phone className="w-3 h-3 text-gray-600" /> {attendee.phone}
+                        </span>
+                      )}
+                      {attendee.email && (
+                        <span className="flex items-center gap-1.5">
+                          <Mail className="w-3 h-3 text-gray-600" /> {attendee.email}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1.5">
+                        <Ticket className="w-3 h-3 text-gray-600" /> {attendee.quantity ?? 1} ticket{(attendee.quantity ?? 1) > 1 ? "s" : ""}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <DollarSign className="w-3 h-3 text-gray-600" /> KES {(attendee.price ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+                    {attendee.checkedInAt && (
+                      <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Checked in at {new Date(attendee.checkedInAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Right: purchase time + check-in button */}
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <p className="text-xs text-gray-600">
+                      {new Date(attendee.purchasedAt).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}
+                    </p>
+                    <button
+                      onClick={() => toggleCheckIn(attendee.id)}
+                      className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition ${
+                        attendee.checkedIn
+                          ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30"
+                          : "bg-white/5 text-gray-400 border border-white/10 hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/30"
+                      }`}
+                    >
+                      {attendee.checkedIn
+                        ? <><XCircle className="w-3.5 h-3.5" /> Undo Check-in</>
+                        : <><CheckCheck className="w-3.5 h-3.5" /> Check In</>
+                      }
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

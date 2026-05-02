@@ -76,7 +76,7 @@ const FAQS = [
       },
       {
         q: "What commission does NeneTickets charge?",
-        a: "We charge a 5% platform fee on each ticket sold. There are no upfront listing fees — you only pay when you sell. Payouts are sent to your M-Pesa within 48 hours after your event ends.",
+        a: "We charge a 3% platform fee on each ticket sold. There are no upfront listing fees — you only pay when you sell. Payouts are sent to your M-Pesa within 48 hours after your event ends.",
       },
     ],
   },

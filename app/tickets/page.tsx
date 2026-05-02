@@ -2,7 +2,7 @@
 
 import Navbar from "../../components/shared/Navbar";
 import { useEffect, useState } from "react";
-import { Ticket, Calendar, MapPin, Download, Share2, MessageCircle, ChevronRight, Inbox } from "lucide-react";
+import { Ticket, Calendar, MapPin, Download, Share2, MessageCircle, ChevronRight, Inbox, XCircle } from "lucide-react";
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 
@@ -30,7 +30,7 @@ function QRCode({ value }: { value: string }) {
   );
 }
 
-function TicketCard({ ticket }: { ticket: PurchasedTicket }) {
+function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancelled?: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   const handleShare = () => {
@@ -50,9 +50,8 @@ function TicketCard({ ticket }: { ticket: PurchasedTicket }) {
   const isPast = new Date(ticket.date) < new Date();
 
   return (
-    <div className={`bg-white/5 border rounded-2xl overflow-hidden transition-all ${isPast ? "border-white/5 opacity-60" : "border-white/10 hover:border-white/20"}`}>
+    <div className={`bg-white/5 border rounded-2xl overflow-hidden transition-all ${isCancelled ? "border-red-500/20" : isPast ? "border-white/5 opacity-60" : "border-white/10 hover:border-white/20"}`}>
       <div className="flex items-stretch">
-        {/* Event image strip */}
         {ticket.image && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -62,12 +61,16 @@ function TicketCard({ ticket }: { ticket: PurchasedTicket }) {
           />
         )}
 
-        {/* Main content */}
         <div className="flex-1 p-4 md:p-5">
           <div className="flex items-start justify-between gap-2 mb-2">
-            <div>
-              {isPast && (
-                <span className="text-xs bg-white/10 text-gray-500 px-2 py-0.5 rounded-full font-bold mr-2">Past</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {isCancelled && (
+                <span className="text-xs bg-red-500/15 text-red-400 border border-red-500/25 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <XCircle className="w-3 h-3" /> CANCELLED
+                </span>
+              )}
+              {!isCancelled && isPast && (
+                <span className="text-xs bg-white/10 text-gray-500 px-2 py-0.5 rounded-full font-bold">Past</span>
               )}
               <span className="text-blue-400 text-xs font-bold uppercase tracking-wider capitalize">{ticket.type}</span>
             </div>
@@ -86,7 +89,6 @@ function TicketCard({ ticket }: { ticket: PurchasedTicket }) {
           </div>
         </div>
 
-        {/* Right: price + expand toggle */}
         <div className="flex flex-col items-end justify-between p-4 flex-shrink-0">
           <span className="text-sm font-bold text-white">KES {ticket.price.toLocaleString()}</span>
           <button
@@ -97,6 +99,18 @@ function TicketCard({ ticket }: { ticket: PurchasedTicket }) {
           </button>
         </div>
       </div>
+
+      {/* Cancelled notice */}
+      {isCancelled && (
+        <div className="bg-red-500/5 border-t border-red-500/20 px-5 py-3 flex items-start gap-2">
+          <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-red-400 leading-relaxed">
+            This event was cancelled. For a full refund, contact{" "}
+            <a href="mailto:support@nenetickets.co.ke" className="underline hover:text-red-300">support@nenetickets.co.ke</a>
+            {" "}— refunds processed within 7–14 business days.
+          </p>
+        </div>
+      )}
 
       {/* Expanded: QR + actions */}
       {expanded && (
@@ -143,11 +157,11 @@ function TicketCard({ ticket }: { ticket: PurchasedTicket }) {
 export default function MyTicketsPage() {
   const [tickets, setTickets] = useState<PurchasedTicket[]>([]);
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
+  const [cancelledTitles, setCancelledTitles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
-      // Sort newest first
       stored.sort((a: PurchasedTicket, b: PurchasedTicket) =>
         new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
       );
@@ -155,6 +169,16 @@ export default function MyTicketsPage() {
     } catch {
       setTickets([]);
     }
+
+    fetch("/api/events")
+      .then((r) => r.ok ? r.json() : [])
+      .then((events: { title: string; cancelled?: boolean }[]) => {
+        const cancelled = new Set(
+          events.filter((e) => e.cancelled).map((e) => e.title)
+        );
+        setCancelledTitles(cancelled);
+      })
+      .catch(() => {});
   }, []);
 
   const now = new Date();
@@ -232,7 +256,11 @@ export default function MyTicketsPage() {
           ) : (
             <div className="space-y-4">
               {filtered.map((ticket) => (
-                <TicketCard key={ticket.id} ticket={ticket} />
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  isCancelled={cancelledTitles.has(ticket.title)}
+                />
               ))}
             </div>
           )}

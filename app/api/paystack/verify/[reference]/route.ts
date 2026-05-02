@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { reference: string } }
 ) {
   try {
@@ -22,9 +22,7 @@ export async function GET(
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
       {
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-        },
+        headers: { Authorization: `Bearer ${secretKey}` },
         cache: "no-store",
       }
     );
@@ -46,6 +44,28 @@ export async function GET(
         { status: 200 }
       );
     }
+
+    // ── Increment sold count in Redis ─────────────────────────────────────────
+    // metadata is passed from the checkout initialize call
+    const meta = transaction.metadata ?? {};
+    const eventId    = meta.eventId    as string | undefined;
+    const ticketType = meta.ticketType as string | undefined;
+    const quantity   = parseInt(meta.quantity ?? "1", 10) || 1;
+
+    if (eventId && ticketType) {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://nenetickets.co.ke";
+        await fetch(`${baseUrl}/api/events/${eventId}/capacity`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticketType, quantity }),
+        });
+      } catch (capErr) {
+        // Non-fatal — ticket is still valid even if count update fails
+        console.warn("Capacity update failed:", capErr);
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     return NextResponse.json({
       paid: true,

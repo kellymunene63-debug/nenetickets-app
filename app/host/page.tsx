@@ -269,67 +269,47 @@ export default function HostPage() {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    try {
-      await fetch(`/api/events/${eventId}`, { method: "DELETE" });
-    } catch { /* silent */ }
+    const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+    if (res.ok) {
+      setMyEvents((prev) => prev.filter((e) => e.id !== eventId));
+    }
     setDeleteConfirm(null);
-    loadDashboardData();
   };
 
   const handleCancelEvent = async (eventId: string) => {
-    try {
-      const res = await fetch(`/api/events/${eventId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cancelled: true, cancelReason }),
-      });
-      // If event not found in Redis, update localStorage directly
-      if (!res.ok) {
-        const stored: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
-        const idx = stored.findIndex((e) => e.id === eventId);
-        if (idx !== -1) {
-          stored[idx] = { ...stored[idx], cancelled: true, cancelReason, cancelledAt: new Date().toISOString() };
-          localStorage.setItem("nene_events", JSON.stringify(stored));
-        }
-      }
-    } catch {
-      // Fallback: update localStorage
-      const stored: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
-      const idx = stored.findIndex((e) => e.id === eventId);
-      if (idx !== -1) {
-        stored[idx] = { ...stored[idx], cancelled: true, cancelReason, cancelledAt: new Date().toISOString() };
-        localStorage.setItem("nene_events", JSON.stringify(stored));
-      }
+    const res = await fetch(`/api/events/${eventId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancelled: true, cancelReason }),
+    });
+    if (res.ok) {
+      setMyEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId
+            ? { ...e, cancelled: true, cancelReason, cancelledAt: new Date().toISOString() }
+            : e
+        )
+      );
     }
     setCancelConfirm(null);
     setCancelReason("");
-    await loadDashboardData();
   };
 
   const handleRestoreEvent = async (eventId: string) => {
-    try {
-      const res = await fetch(`/api/events/${eventId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cancelled: false }),
-      });
-      if (!res.ok) {
-        const stored: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
-        const idx = stored.findIndex((e) => e.id === eventId);
-        if (idx !== -1) {
-          stored[idx] = { ...stored[idx], cancelled: false, cancelReason: "", cancelledAt: null };
-          localStorage.setItem("nene_events", JSON.stringify(stored));
-        }
-      }
-    } catch {
-      const stored: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
-      const idx = stored.findIndex((e) => e.id === eventId);
-      if (idx !== -1) {
-        stored[idx] = { ...stored[idx], cancelled: false, cancelReason: "", cancelledAt: null };
-        localStorage.setItem("nene_events", JSON.stringify(stored));
-      }
+    const res = await fetch(`/api/events/${eventId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancelled: false }),
+    });
+    if (res.ok) {
+      setMyEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId
+            ? { ...e, cancelled: false, cancelReason: "", cancelledAt: null }
+            : e
+        )
+      );
     }
-    await loadDashboardData();
   };
 
   const startEditEvent = (event: OrganizerEvent) => {

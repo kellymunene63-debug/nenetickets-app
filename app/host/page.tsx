@@ -308,6 +308,13 @@ export default function HostPage() {
       ? Math.min(...tickets.map((t) => parseInt(t.price) || 0))
       : 0;
 
+    // Format date as "Jun 7, 2026" so it displays and sorts correctly everywhere
+    const formattedDate = formData.date
+      ? new Date(formData.date + "T12:00:00").toLocaleDateString("en-KE", {
+          month: "short", day: "numeric", year: "numeric",
+        })
+      : formData.date;
+
     const allEvents: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
 
     if (editingEvent) {
@@ -318,7 +325,7 @@ export default function HostPage() {
           ...allEvents[idx],
           title: formData.title,
           description: formData.description,
-          date: formData.date,
+          date: formattedDate,
           time: formData.time,
           location: formData.location,
           price: `KES ${lowestPrice.toLocaleString()}`,
@@ -341,7 +348,7 @@ export default function HostPage() {
         id,
         title: formData.title,
         description: formData.description,
-        date: formData.date,
+        date: formattedDate,
         time: formData.time,
         location: formData.location,
         price: `KES ${lowestPrice.toLocaleString()}`,
@@ -368,7 +375,12 @@ export default function HostPage() {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setFormData({ ...formData, image: URL.createObjectURL(file) });
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setFormData((prev) => ({ ...prev, image: ev.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const addTicket = () => {

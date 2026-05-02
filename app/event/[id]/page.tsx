@@ -3,10 +3,10 @@
 import Navbar from "../../../components/shared/Navbar";
 import ReviewSection from "../../../components/ReviewSection";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Calendar, MapPin, ArrowLeft, CheckCircle2, Minus, Plus, Share2,
-  Copy, Twitter, MessageCircle, Info, Eye, Clock, Tag
+  Copy, Twitter, MessageCircle, Info, Eye, Clock, Tag, Sparkles, ArrowRight
 } from "lucide-react";
 
 const EVENTS_DB: Record<string, {
@@ -127,6 +127,17 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [viewers, setViewers] = useState<number | null>(null);
 
   const daysUntil = event ? getDaysUntil(event.date) : null;
+
+  // Recommendations: same category first, then others — exclude current event, max 3
+  const recommendations = useMemo(() => {
+    if (!event) return [];
+    const all = Object.entries(EVENTS_DB)
+      .filter(([id]) => id !== params.id)
+      .map(([id, e]) => ({ id, ...e }));
+    const sameCategory = all.filter((e) => e.category === event.category);
+    const others = all.filter((e) => e.category !== event.category);
+    return [...sameCategory, ...others].slice(0, 3);
+  }, [params.id, event]);
 
   // Register this visit and then poll every 30s
   useEffect(() => {
@@ -410,6 +421,97 @@ export default function EventPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       </div>
+
+      {/* ── You might also like ────────────────────────────────────────────── */}
+      {recommendations.length > 0 && (
+        <section className="border-t border-white/5 bg-white/[0.02] py-16">
+          <div className="container mx-auto px-6">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" /> Based on your interest
+                </p>
+                <h2 className="text-2xl font-bold">You Might Also Like</h2>
+              </div>
+              <Link href={`/events?category=${encodeURIComponent(event.category)}`}>
+                <button className="hidden md:flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 font-bold transition">
+                  More {event.category} <ArrowRight className="w-4 h-4" />
+                </button>
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {recommendations.map((rec) => {
+                const daysLeft = getDaysUntil(rec.date);
+                const recPrice = rec.basePrice === 0 ? "Free" : `KES ${rec.basePrice.toLocaleString()}`;
+                return (
+                  <Link key={rec.id} href={`/event/${rec.id}`}>
+                    <div className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 cursor-pointer">
+                      {/* Image */}
+                      <div className="relative h-44 overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={rec.image}
+                          alt={rec.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+
+                        {/* Category badge */}
+                        <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm text-blue-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-blue-500/20">
+                          {rec.category}
+                        </span>
+
+                        {/* Urgency badge */}
+                        {daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && (
+                          <span className="absolute top-3 right-3 bg-orange-500/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5" />
+                            {daysLeft === 0 ? "Today" : daysLeft === 1 ? "Tomorrow" : `${daysLeft}d left`}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Details */}
+                      <div className="p-4">
+                        <h3 className="font-bold text-white text-sm leading-snug mb-2 line-clamp-2 group-hover:text-blue-400 transition-colors">
+                          {rec.title}
+                        </h3>
+                        <div className="space-y-1 mb-3">
+                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <Calendar className="w-3 h-3 text-gray-600" /> {rec.date}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <MapPin className="w-3 h-3 text-gray-600" /> {rec.location}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                          <div>
+                            <span className="text-gray-500 text-[10px] block">From</span>
+                            <span className={`font-bold text-sm ${rec.basePrice === 0 ? "text-green-400" : "text-white"}`}>
+                              {recPrice}
+                            </span>
+                          </div>
+                          <span className="text-xs font-bold text-blue-400 group-hover:text-blue-300 flex items-center gap-1 transition-colors">
+                            Get Tickets <ArrowRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="mt-8 text-center md:hidden">
+              <Link href={`/events?category=${encodeURIComponent(event.category)}`}>
+                <button className="bg-white/5 border border-white/10 text-white px-8 py-3 rounded-xl font-bold text-sm w-full">
+                  More {event.category} Events
+                </button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

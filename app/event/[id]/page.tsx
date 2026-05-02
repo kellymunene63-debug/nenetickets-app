@@ -162,23 +162,35 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [allLocalEvents, setAllLocalEvents] = useState<{ id: string; data: EventData }[]>([]);
 
   useEffect(() => {
-    try {
-      const stored: {
+    // Fetch from KV database (cross-browser) with localStorage fallback
+    fetch("/api/events")
+      .then((r) => r.json())
+      .then((stored: {
         id: string; title: string; description?: string; date: string; time?: string;
         location: string; image: string; category: string; aiTag?: string;
         tickets?: { name: string; price: string; capacity?: string }[];
-      }[] = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
-
-      // Build local events list for recommendations
-      const localList = stored.map((ev) => ({ id: ev.id, data: normaliseLocalEvent(ev) }));
-      setAllLocalEvents(localList);
-
-      if (!staticEvent) {
-        const found = stored.find((ev) => ev.id === params.id);
-        if (found) setLocalEvent(normaliseLocalEvent(found));
-      }
-    } catch { /* silent */ }
-    setLoadingLocal(false);
+      }[]) => {
+        if (!Array.isArray(stored)) return;
+        const localList = stored.map((ev) => ({ id: ev.id, data: normaliseLocalEvent(ev) }));
+        setAllLocalEvents(localList);
+        if (!staticEvent) {
+          const found = stored.find((ev) => ev.id === params.id);
+          if (found) setLocalEvent(normaliseLocalEvent(found));
+        }
+      })
+      .catch(() => {
+        // Fallback to localStorage
+        try {
+          const stored = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
+          const localList = stored.map((ev: { id: string }) => ({ id: ev.id, data: normaliseLocalEvent(ev as Parameters<typeof normaliseLocalEvent>[0]) }));
+          setAllLocalEvents(localList);
+          if (!staticEvent) {
+            const found = stored.find((ev: { id: string }) => ev.id === params.id);
+            if (found) setLocalEvent(normaliseLocalEvent(found));
+          }
+        } catch { /* silent */ }
+      })
+      .finally(() => setLoadingLocal(false));
   }, [params.id, staticEvent]);
 
   const event: EventData | null = staticEvent ?? localEvent;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 const KEY = "nene:events";
@@ -9,7 +10,6 @@ interface StoredEvent {
   [key: string]: unknown;
 }
 
-// ── Upstash Redis helpers (plain fetch — no package needed) ──────────────────
 async function redisGet<T>(key: string): Promise<T | null> {
   const url   = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -35,7 +35,6 @@ async function redisSet(key: string, value: unknown): Promise<void> {
   });
 }
 
-// ── Route handlers ────────────────────────────────────────────────────────────
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
@@ -69,7 +68,6 @@ export async function PUT(
   }
 }
 
-// PATCH — soft-cancel or restore an event
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }

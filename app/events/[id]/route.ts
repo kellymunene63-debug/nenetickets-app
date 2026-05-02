@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 const KEY = "nene:events";
 
 interface StoredEvent {
@@ -63,6 +65,30 @@ export async function PUT(
     return NextResponse.json({ success: true, event: events[idx] });
   } catch (err) {
     console.error("PUT /api/events/[id]:", err);
+    return NextResponse.json({ success: false }, { status: 500 });
+  }
+}
+
+// PATCH — soft-cancel or restore an event
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { cancelled, cancelReason } = await req.json() as { cancelled: boolean; cancelReason?: string };
+    const events = await redisGet<StoredEvent[]>(KEY) ?? [];
+    const idx    = events.findIndex((e) => e.id === params.id);
+    if (idx === -1) return NextResponse.json({ success: false }, { status: 404 });
+    events[idx] = {
+      ...events[idx],
+      cancelled,
+      cancelReason: cancelReason ?? "",
+      cancelledAt:  cancelled ? new Date().toISOString() : null,
+    };
+    await redisSet(KEY, events);
+    return NextResponse.json({ success: true, event: events[idx] });
+  } catch (err) {
+    console.error("PATCH /api/events/[id]:", err);
     return NextResponse.json({ success: false }, { status: 500 });
   }
 }

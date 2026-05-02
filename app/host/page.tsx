@@ -7,7 +7,8 @@ import {
   BarChart3, Users, ArrowLeft, LogOut, Eye, EyeOff, Lock,
   ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar,
   ExternalLink, Edit2, MapPin, FileText, Hash, ChevronDown,
-  Download, Search, CheckCheck, Clock, Phone, Mail, UserCheck, XCircle, PieChart
+  Download, Search, CheckCheck, Clock, Phone, Mail, UserCheck, XCircle, PieChart,
+  ToggleLeft, ToggleRight, Percent, BadgeDollarSign
 } from "lucide-react";
 import Link from "next/link";
 
@@ -59,6 +60,24 @@ interface SoldTicket {
   checkedInAt?: string;
 }
 
+interface PromoCode {
+  discount: number;
+  type: "percent" | "fixed";
+  description: string;
+  active: boolean;
+}
+
+const DEFAULT_PROMOS: Record<string, PromoCode> = {
+  NENE10:    { discount: 10,  type: "percent", description: "10% off — NeneTickets special",   active: true },
+  WELCOME20: { discount: 20,  type: "percent", description: "20% off — new user welcome",      active: true },
+  STUDENT15: { discount: 15,  type: "percent", description: "15% off — student discount",      active: true },
+  EARLYBIRD: { discount: 20,  type: "percent", description: "20% off — early bird deal",       active: true },
+  NAIROBI25: { discount: 25,  type: "percent", description: "25% off — Nairobi locals",        active: true },
+  FRIYAY:    { discount: 15,  type: "percent", description: "15% off — Friday special",        active: true },
+  VIP500:    { discount: 500, type: "fixed",   description: "KES 500 off any ticket",          active: true },
+  LAUNCH50:  { discount: 50,  type: "percent", description: "50% off — launch celebration",    active: false },
+};
+
 const STOCK_IMAGES = [
   { label: "Concert / Music", value: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070" },
   { label: "Sports Event", value: "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931" },
@@ -93,6 +112,10 @@ export default function HostPage() {
   const [editingEvent, setEditingEvent] = useState<OrganizerEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<OrganizerEvent | null>(null);
   const [attendeeSearch, setAttendeeSearch] = useState("");
+  const [dashTab, setDashTab] = useState<"events" | "promos">("events");
+  const [promoCodes, setPromoCodes] = useState<Record<string, PromoCode>>(DEFAULT_PROMOS);
+  const [newPromo, setNewPromo] = useState({ code: "", discount: "", type: "percent" as "percent" | "fixed", description: "" });
+  const [promoSaved, setPromoSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -145,6 +168,11 @@ export default function HostPage() {
     } else {
       setView("auth");
     }
+    // Load promo codes
+    try {
+      const stored = localStorage.getItem("nene_promo_codes");
+      if (stored) setPromoCodes({ ...DEFAULT_PROMOS, ...JSON.parse(stored) });
+    } catch { /* silent */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -257,6 +285,38 @@ export default function HostPage() {
     });
     setTickets([{ name: "Regular", price: "2500", capacity: "100" }]);
     setIsPublished(false);
+  };
+
+  const savePromoCodes = (updated: Record<string, PromoCode>) => {
+    // Only save organizer-modified codes (not the defaults)
+    localStorage.setItem("nene_promo_codes", JSON.stringify(updated));
+    setPromoCodes(updated);
+    setPromoSaved(true);
+    setTimeout(() => setPromoSaved(false), 2000);
+  };
+
+  const togglePromo = (code: string) => {
+    const updated = { ...promoCodes, [code]: { ...promoCodes[code], active: !promoCodes[code].active } };
+    savePromoCodes(updated);
+  };
+
+  const deletePromo = (code: string) => {
+    const updated = { ...promoCodes };
+    delete updated[code];
+    savePromoCodes(updated);
+  };
+
+  const addPromoCode = () => {
+    const code = newPromo.code.trim().toUpperCase();
+    const discount = parseInt(newPromo.discount);
+    if (!code || !discount || !newPromo.description) return;
+    if (newPromo.type === "percent" && (discount < 1 || discount > 100)) return;
+    const updated = {
+      ...promoCodes,
+      [code]: { discount, type: newPromo.type, description: newPromo.description.trim(), active: true },
+    };
+    savePromoCodes(updated);
+    setNewPromo({ code: "", discount: "", type: "percent", description: "" });
   };
 
   const getAttendeesForEvent = (eventTitle: string): SoldTicket[] => {
@@ -593,7 +653,141 @@ export default function HostPage() {
             </div>
           )}
 
-          {/* Events Table */}
+          {/* Tab switcher */}
+          <div className="flex gap-2 mb-6 border-b border-white/10 pb-0">
+            <button
+              onClick={() => setDashTab("events")}
+              className={`px-5 py-2.5 text-sm font-bold rounded-t-xl transition border-b-2 -mb-px ${dashTab === "events" ? "border-blue-500 text-white" : "border-transparent text-gray-500 hover:text-white"}`}
+            >
+              <span className="flex items-center gap-2"><Ticket className="w-4 h-4" /> Your Events</span>
+            </button>
+            <button
+              onClick={() => setDashTab("promos")}
+              className={`px-5 py-2.5 text-sm font-bold rounded-t-xl transition border-b-2 -mb-px ${dashTab === "promos" ? "border-blue-500 text-white" : "border-transparent text-gray-500 hover:text-white"}`}
+            >
+              <span className="flex items-center gap-2"><Tag className="w-4 h-4" /> Promo Codes</span>
+            </button>
+          </div>
+
+          {/* ── PROMO CODES TAB ── */}
+          {dashTab === "promos" && (
+            <div className="space-y-6">
+              {/* Add new code */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4 flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-blue-400" /> Create New Promo Code
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Code</label>
+                    <input
+                      value={newPromo.code}
+                      onChange={(e) => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase().replace(/\s/g, "") })}
+                      placeholder="e.g. FLASH30"
+                      className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-mono outline-none focus:border-blue-500 transition placeholder:text-gray-700 uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Description</label>
+                    <input
+                      value={newPromo.description}
+                      onChange={(e) => setNewPromo({ ...newPromo, description: e.target.value })}
+                      placeholder="e.g. Flash sale — 30% off"
+                      className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-blue-500 transition placeholder:text-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Discount Type</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setNewPromo({ ...newPromo, type: "percent" })}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold border transition ${newPromo.type === "percent" ? "bg-blue-600/20 border-blue-500 text-blue-400" : "bg-black/50 border-white/10 text-gray-500 hover:border-white/30"}`}
+                      >
+                        <Percent className="w-3.5 h-3.5" /> Percent
+                      </button>
+                      <button
+                        onClick={() => setNewPromo({ ...newPromo, type: "fixed" })}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold border transition ${newPromo.type === "fixed" ? "bg-green-600/20 border-green-500 text-green-400" : "bg-black/50 border-white/10 text-gray-500 hover:border-white/30"}`}
+                      >
+                        <BadgeDollarSign className="w-3.5 h-3.5" /> Fixed KES
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">
+                      {newPromo.type === "percent" ? "Discount %" : "Discount Amount (KES)"}
+                    </label>
+                    <input
+                      type="number"
+                      value={newPromo.discount}
+                      onChange={(e) => setNewPromo({ ...newPromo, discount: e.target.value })}
+                      placeholder={newPromo.type === "percent" ? "e.g. 20" : "e.g. 500"}
+                      min={1}
+                      max={newPromo.type === "percent" ? 100 : undefined}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-blue-500 transition placeholder:text-gray-700"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={addPromoCode}
+                  disabled={!newPromo.code || !newPromo.discount || !newPromo.description}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Add Promo Code
+                </button>
+              </div>
+
+              {/* Existing codes */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Active Codes</h3>
+                  {promoSaved && (
+                    <span className="text-green-400 text-xs font-bold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Saved
+                    </span>
+                  )}
+                </div>
+                <div className="divide-y divide-white/5">
+                  {Object.entries(promoCodes).map(([code, data]) => (
+                    <div key={code} className={`flex items-center gap-4 px-5 py-4 transition ${data.active ? "" : "opacity-50"}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-mono font-bold text-sm text-white">{code}</span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${data.type === "fixed" ? "bg-green-500/15 text-green-400" : "bg-blue-500/15 text-blue-400"}`}>
+                            {data.type === "fixed" ? `KES ${data.discount} off` : `${data.discount}% off`}
+                          </span>
+                          {!data.active && <span className="text-xs text-gray-600 bg-white/5 px-2 py-0.5 rounded-full">Inactive</span>}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{data.description}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => togglePromo(code)}
+                          className={`transition ${data.active ? "text-green-400 hover:text-gray-400" : "text-gray-600 hover:text-green-400"}`}
+                          title={data.active ? "Deactivate" : "Activate"}
+                        >
+                          {data.active
+                            ? <ToggleRight className="w-6 h-6" />
+                            : <ToggleLeft className="w-6 h-6" />
+                          }
+                        </button>
+                        <button
+                          onClick={() => deletePromo(code)}
+                          className="text-gray-600 hover:text-red-400 transition p-1 rounded-lg hover:bg-red-500/10"
+                          title="Delete code"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── EVENTS TAB ── */}
+          {dashTab === "events" && <>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-xl font-bold">Your Events</h2>
             {myEvents.length > 0 && (
@@ -699,6 +893,7 @@ export default function HostPage() {
               </button>
             </div>
           )}
+          </>}
         </div>
       </main>
     );

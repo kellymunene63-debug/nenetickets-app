@@ -105,7 +105,12 @@ export default function ValidatorPage() {
 
   // Core validation logic (shared between manual + camera)
   const validate = useCallback((rawCode: string) => {
-    const trimmed = rawCode.trim().toUpperCase();
+    // Strip any URL prefix — ticket QR codes may encode just the ID or a full URL
+    let trimmed = rawCode.trim();
+    // Extract trailing ticket ID if it looks like a URL
+    const urlMatch = trimmed.match(/[A-Z0-9]{8}$/i);
+    trimmed = (urlMatch ? urlMatch[0] : trimmed).toUpperCase();
+
     if (!trimmed) return;
 
     const timeStr = new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" });

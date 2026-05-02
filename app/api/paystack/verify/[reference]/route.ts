@@ -25,7 +25,6 @@ export async function GET(
         headers: {
           Authorization: `Bearer ${secretKey}`,
         },
-        // Prevent Next.js from caching the verification response
         cache: "no-store",
       }
     );
@@ -41,7 +40,6 @@ export async function GET(
 
     const transaction = data.data;
 
-    // Only consider "success" status as paid
     if (transaction.status !== "success") {
       return NextResponse.json(
         { paid: false, status: transaction.status },
@@ -52,11 +50,11 @@ export async function GET(
     return NextResponse.json({
       paid: true,
       reference: transaction.reference,
-      amount: transaction.amount / 100, // convert back from kobo to KES
+      amount: transaction.amount / 100,
       currency: transaction.currency,
       email: transaction.customer?.email,
       paidAt: transaction.paid_at,
-      channel: transaction.channel,       // "card", "mobile_money", etc.
+      channel: transaction.channel,
       metadata: transaction.metadata,
     });
   } catch (error) {

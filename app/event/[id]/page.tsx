@@ -199,6 +199,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
   const [viewers, setViewers] = useState<number | null>(null);
+  const [capacity, setCapacity] = useState<Record<string, { sold: number; capacity: number; available: number; soldOut: boolean }>>({});
 
   const daysUntil = event ? getDaysUntil(event.date) : null;
 
@@ -217,6 +218,14 @@ export default function EventPage({ params }: { params: { id: string } }) {
     const others = all.filter((e) => e.category !== event.category);
     return [...sameCategory, ...others].slice(0, 3);
   }, [params.id, event, allLocalEvents]);
+
+  // Fetch capacity data for hosted events
+  useEffect(() => {
+    fetch(`/api/events/${params.id}/capacity`)
+      .then((r) => r.ok ? r.json() : {})
+      .then((data) => setCapacity(data))
+      .catch(() => {});
+  }, [params.id]);
 
   // Register viewer + poll
   useEffect(() => {
@@ -278,6 +287,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const vipPrice = event.baseVipPrice;
   const currentPrice = selectedTicket === "regular" ? regularPrice : vipPrice;
   const totalPrice = currentPrice * quantity;
+
+  // Sold-out checks
+  const regularCapData = capacity[regularLabel];
+  const vipCapData     = capacity[vipLabel];
+  const regularSoldOut = regularCapData?.soldOut ?? false;
+  const vipSoldOut     = vipCapData?.soldOut ?? false;
+  const currentSoldOut = selectedTicket === "regular" ? regularSoldOut : vipSoldOut;
 
   const handleQuantity = (type: "inc" | "dec") => {
     if (type === "dec" && quantity > 1) setQuantity(quantity - 1);
@@ -409,23 +425,33 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
             {/* Regular */}
             <div
-              onClick={() => setSelectedTicket("regular")}
-              className={`mb-3 p-4 rounded-xl border cursor-pointer transition-all relative ${
-                selectedTicket === "regular"
-                  ? "border-blue-500 bg-blue-500/10"
-                  : "border-white/10 hover:border-white/30 hover:bg-white/5"
+              onClick={() => !regularSoldOut && setSelectedTicket("regular")}
+              className={`mb-3 p-4 rounded-xl border transition-all relative ${
+                regularSoldOut
+                  ? "border-white/5 opacity-60 cursor-not-allowed"
+                  : selectedTicket === "regular"
+                  ? "border-blue-500 bg-blue-500/10 cursor-pointer"
+                  : "border-white/10 hover:border-white/30 hover:bg-white/5 cursor-pointer"
               }`}
             >
               <div className="flex justify-between items-center gap-3">
                 <div className="min-w-0">
                   <span className="font-bold block">{regularLabel}</span>
-                  <span className="text-xs text-gray-500">General access</span>
+                  <span className="text-xs text-gray-500">
+                    {regularSoldOut ? "Sold Out" : regularCapData ? `${regularCapData.available} left` : "General access"}
+                  </span>
                 </div>
                 <div className="flex-shrink-0 flex items-center gap-2">
-                  <span className={`font-bold text-lg ${selectedTicket === "regular" ? "text-blue-400" : "text-white"}`}>
-                    {regularPrice === 0 ? "Free" : `KES ${regularPrice.toLocaleString()}`}
-                  </span>
-                  {selectedTicket === "regular" && <CheckCircle2 className="text-blue-500 w-5 h-5 flex-shrink-0" />}
+                  {regularSoldOut ? (
+                    <span className="text-xs font-bold bg-red-500/20 text-red-400 px-3 py-1 rounded-full border border-red-500/30">SOLD OUT</span>
+                  ) : (
+                    <>
+                      <span className={`font-bold text-lg ${selectedTicket === "regular" ? "text-blue-400" : "text-white"}`}>
+                        {regularPrice === 0 ? "Free" : `KES ${regularPrice.toLocaleString()}`}
+                      </span>
+                      {selectedTicket === "regular" && <CheckCircle2 className="text-blue-500 w-5 h-5 flex-shrink-0" />}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -433,28 +459,40 @@ export default function EventPage({ params }: { params: { id: string } }) {
             {/* VIP — only shown if there's a second ticket type */}
             {hasVip && (
               <div
-                onClick={() => setSelectedTicket("vip")}
-                className={`mb-5 p-4 rounded-xl border cursor-pointer transition-all relative ${
-                  selectedTicket === "vip"
-                    ? "border-pink-500 bg-pink-500/10"
-                    : "border-white/10 hover:border-white/30 hover:bg-white/5"
+                onClick={() => !vipSoldOut && setSelectedTicket("vip")}
+                className={`mb-5 p-4 rounded-xl border transition-all relative ${
+                  vipSoldOut
+                    ? "border-white/5 opacity-60 cursor-not-allowed"
+                    : selectedTicket === "vip"
+                    ? "border-pink-500 bg-pink-500/10 cursor-pointer"
+                    : "border-white/10 hover:border-white/30 hover:bg-white/5 cursor-pointer"
                 }`}
               >
                 <div className="flex justify-between items-center gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="font-bold">{vipLabel}</span>
-                      <span className="bg-gradient-to-r from-pink-600 to-purple-600 text-[9px] uppercase tracking-wider px-2 py-0.5 rounded text-white font-bold flex-shrink-0">
-                        {event.tag}
-                      </span>
+                      {!vipSoldOut && (
+                        <span className="bg-gradient-to-r from-pink-600 to-purple-600 text-[9px] uppercase tracking-wider px-2 py-0.5 rounded text-white font-bold flex-shrink-0">
+                          {event.tag}
+                        </span>
+                      )}
                     </div>
-                    <span className="text-xs text-gray-500">Premium access + perks</span>
+                    <span className="text-xs text-gray-500">
+                      {vipSoldOut ? "Sold Out" : vipCapData ? `${vipCapData.available} left` : "Premium access + perks"}
+                    </span>
                   </div>
                   <div className="flex-shrink-0 flex items-center gap-2">
-                    <span className={`font-bold text-lg ${selectedTicket === "vip" ? "text-pink-400" : "text-white"}`}>
-                      {vipPrice === 0 ? "Free" : `KES ${vipPrice.toLocaleString()}`}
-                    </span>
-                    {selectedTicket === "vip" && <CheckCircle2 className="text-pink-500 w-5 h-5 flex-shrink-0" />}
+                    {vipSoldOut ? (
+                      <span className="text-xs font-bold bg-red-500/20 text-red-400 px-3 py-1 rounded-full border border-red-500/30">SOLD OUT</span>
+                    ) : (
+                      <>
+                        <span className={`font-bold text-lg ${selectedTicket === "vip" ? "text-pink-400" : "text-white"}`}>
+                          {vipPrice === 0 ? "Free" : `KES ${vipPrice.toLocaleString()}`}
+                        </span>
+                        {selectedTicket === "vip" && <CheckCircle2 className="text-pink-500 w-5 h-5 flex-shrink-0" />}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -487,14 +525,20 @@ export default function EventPage({ params }: { params: { id: string } }) {
               </span>
             </div>
 
-            <Link href={checkoutUrl}>
-              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 active:scale-95">
-                {currentPrice === 0
-                  ? <><Tag className="w-5 h-5" /> Reserve Free Ticket</>
-                  : <>Pay KES {totalPrice.toLocaleString()} →</>
-                }
+            {currentSoldOut ? (
+              <button disabled className="w-full bg-gray-800 text-gray-500 font-bold py-4 rounded-xl cursor-not-allowed flex items-center justify-center gap-2">
+                🚫 Sold Out
               </button>
-            </Link>
+            ) : (
+              <Link href={checkoutUrl}>
+                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 active:scale-95">
+                  {currentPrice === 0
+                    ? <><Tag className="w-5 h-5" /> Reserve Free Ticket</>
+                    : <>Pay KES {totalPrice.toLocaleString()} →</>
+                  }
+                </button>
+              </Link>
+            )}
 
             <p className="text-center text-xs text-gray-600 mt-3 flex items-center justify-center gap-1">
               <span>🔒</span> Secured by Paystack · M-Pesa accepted

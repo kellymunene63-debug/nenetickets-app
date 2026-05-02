@@ -1,94 +1,122 @@
-"use client";
-
 import Navbar from "../../components/shared/Navbar";
 import Link from "next/link";
-import { Shield, Lock, FileText, Scale, Mail } from "lucide-react";
+import type { Metadata } from "next";
 
-export default function PrivacyPolicy() {
+export const metadata: Metadata = {
+  title: "Privacy Policy | NeneTickets",
+  description: "Read the Privacy Policy for NeneTickets — how we collect, use, and protect your data.",
+};
+
+export default function PrivacyPage() {
+  const lastUpdated = "1 May 2026";
+
   return (
-    <main className="min-h-screen bg-black text-white selection:bg-blue-600 selection:text-white">
+    <main className="min-h-screen bg-[#050511] text-white">
       <Navbar />
-      <div className="container mx-auto px-4 py-24 max-w-4xl">
-        <div className="mb-12 border-b border-white/10 pb-8">
-            <div className="flex items-center gap-3 text-blue-500 mb-4"><Shield className="w-8 h-8" /><span className="font-bold tracking-widest uppercase text-sm">Legal Compliance</span></div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">Privacy Policy</h1>
-            <p className="text-gray-400 text-lg">Last Updated: {new Date().toLocaleDateString('en-KE', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <div className="container mx-auto px-4 py-32 max-w-3xl">
+        <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Legal</p>
+        <h1 className="text-4xl font-bold mb-2">Privacy Policy</h1>
+        <p className="text-gray-500 text-sm mb-12">Last updated: {lastUpdated}</p>
+
+        <div className="prose prose-invert max-w-none space-y-10 text-gray-300 leading-relaxed">
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">1. Introduction</h2>
+            <p>NeneTickets Ltd (&quot;NeneTickets&quot;, &quot;we&quot;, &quot;us&quot;) is committed to protecting your personal information. This Privacy Policy explains what data we collect, how we use it, and your rights under the Kenya Data Protection Act, 2019.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">2. Information We Collect</h2>
+            <p>We collect the following categories of personal data:</p>
+            <ul className="list-disc pl-5 mt-3 space-y-2">
+              <li><strong className="text-white">Contact information:</strong> Your name, email address, and phone number provided at checkout or account registration.</li>
+              <li><strong className="text-white">Payment information:</strong> Transaction reference numbers and payment status. We do not store your card or M-Pesa PIN — payments are processed by Paystack.</li>
+              <li><strong className="text-white">Ticket data:</strong> The events you purchase tickets for, ticket types, and quantities.</li>
+              <li><strong className="text-white">Usage data:</strong> Pages visited, events viewed, and actions taken on the Platform (collected anonymously for analytics).</li>
+              <li><strong className="text-white">Device data:</strong> Browser type, operating system, and IP address for security and fraud prevention.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">3. How We Use Your Information</h2>
+            <p>We use your personal data to:</p>
+            <ul className="list-disc pl-5 mt-3 space-y-2">
+              <li>Process your ticket purchases and send booking confirmations.</li>
+              <li>Send your e-ticket and QR code via email and SMS.</li>
+              <li>Communicate important updates about events you have booked (e.g. cancellations or venue changes).</li>
+              <li>Prevent fraud and ensure platform security.</li>
+              <li>Improve the Platform through aggregate, anonymised analytics.</li>
+              <li>Comply with our legal obligations under Kenyan law.</li>
+            </ul>
+            <p className="mt-3">We do <strong className="text-white">not</strong> sell your personal data to third parties.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">4. Sharing Your Information</h2>
+            <p>We may share your personal data with:</p>
+            <ul className="list-disc pl-5 mt-3 space-y-2">
+              <li><strong className="text-white">Event organisers:</strong> Your name, phone number, email, and ticket details are shared with the organiser of events you attend for check-in and attendee management purposes.</li>
+              <li><strong className="text-white">Payment processors:</strong> Paystack receives transaction data necessary to process your payment. Paystack&apos;s privacy policy applies to their handling of your data.</li>
+              <li><strong className="text-white">Service providers:</strong> We use Upstash (database), Vercel (hosting), and Clerk (authentication) to operate the Platform. These providers process data on our behalf under confidentiality agreements.</li>
+              <li><strong className="text-white">Legal authorities:</strong> Where required by Kenyan law or a valid court order.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">5. Data Retention</h2>
+            <p>We retain your personal data for as long as necessary to provide the Platform services and comply with our legal obligations. Ticket and transaction records are retained for a minimum of 7 years as required by Kenyan tax law. You may request deletion of your account data at any time (see Section 7).</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">6. Cookies</h2>
+            <p>The Platform uses essential cookies to maintain your session and authentication state. We use anonymised analytics cookies to understand how the Platform is used. You can disable non-essential cookies in your browser settings, though this may affect Platform functionality.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">7. Your Rights</h2>
+            <p>Under the Kenya Data Protection Act, 2019, you have the right to:</p>
+            <ul className="list-disc pl-5 mt-3 space-y-2">
+              <li><strong className="text-white">Access:</strong> Request a copy of the personal data we hold about you.</li>
+              <li><strong className="text-white">Correction:</strong> Request correction of inaccurate or incomplete data.</li>
+              <li><strong className="text-white">Deletion:</strong> Request deletion of your personal data, subject to legal retention requirements.</li>
+              <li><strong className="text-white">Objection:</strong> Object to processing of your data for marketing purposes.</li>
+              <li><strong className="text-white">Portability:</strong> Request a copy of your data in a structured, machine-readable format.</li>
+            </ul>
+            <p className="mt-3">To exercise any of these rights, email us at <a href="mailto:privacy@nenetickets.co.ke" className="text-blue-400 hover:underline">privacy@nenetickets.co.ke</a>. We will respond within 21 days.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">8. Security</h2>
+            <p>We implement industry-standard security measures to protect your data, including HTTPS encryption, secure database storage, and access controls. However, no method of transmission over the internet is 100% secure. If you believe your account has been compromised, contact us immediately.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">9. Children&apos;s Privacy</h2>
+            <p>The Platform is not directed at children under the age of 13. We do not knowingly collect personal data from children. If you believe a child has provided us with personal data, please contact us and we will delete it promptly.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">10. Changes to This Policy</h2>
+            <p>We may update this Privacy Policy from time to time. We will notify you of significant changes via email or a notice on the Platform. Continued use of the Platform after changes constitutes your acceptance of the updated Policy.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-white mb-3">11. Contact Us</h2>
+            <p>For privacy-related queries or to exercise your rights, contact our Data Protection Officer:</p>
+            <div className="mt-3 bg-white/5 border border-white/10 rounded-2xl p-5 space-y-1 text-sm">
+              <p className="font-bold text-white">NeneTickets Ltd — Data Protection Officer</p>
+              <p>Nairobi, Kenya</p>
+              <p>Email: <a href="mailto:privacy@nenetickets.co.ke" className="text-blue-400 hover:underline">privacy@nenetickets.co.ke</a></p>
+              <p>Website: <Link href="/" className="text-blue-400 hover:underline">nenetickets.co.ke</Link></p>
+            </div>
+          </section>
+
         </div>
 
-        <div className="space-y-12 text-gray-300 leading-relaxed">
-            <section>
-                <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">1. Introduction & Compliance</h2>
-                <p className="mb-4">NeneTickets (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy. This Privacy Policy outlines how we collect, use, and safeguard your personal data in accordance with the <strong>Constitution of Kenya, 2010</strong> (Article 31) and the <strong>Data Protection Act, 2019</strong>.</p>
-                <p>By using our platform, buying tickets, or hosting events, you consent to the data practices described in this policy. We act as a <strong>Data Controller</strong> for user accounts and a <strong>Data Processor</strong> on behalf of Event Organizers.</p>
-            </section>
-
-            <section>
-                <h2 className="text-2xl font-bold text-white mb-4">2. Personal Data We Collect</h2>
-                <p className="mb-4">To provide our ticketing services, we collect the following personal data:</p>
-                <ul className="list-disc pl-6 space-y-2 mb-4">
-                    <li><strong>Identity Data:</strong> Full name (as required for Ticket Validation).</li>
-                    <li><strong>Contact Data:</strong> Phone number (mandatory for M-Pesa payments) and email address.</li>
-                    <li><strong>Financial Data:</strong> M-Pesa transaction codes and payment status. <em>(Note: We do not store your PINs or bank login details).</em></li>
-                    <li><strong>Technical Data:</strong> IP address, browser type, and device information for security and fraud prevention.</li>
-                </ul>
-            </section>
-
-            <section className="bg-green-900/10 border border-green-500/20 p-6 rounded-2xl">
-                <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center gap-2"><Lock className="w-5 h-5" /> 3. M-Pesa & Financial Privacy</h2>
-                <p className="mb-4">When you choose to pay via M-Pesa, we transmit your phone number to Safaricom PLC solely to initiate the STK Push request.</p>
-                <p><strong>Transaction Codes:</strong> We store M-Pesa Transaction Codes (e.g., QFH34...) for the purpose of validating payments and resolving support tickets. This data is retained for the statutory period required by Kenyan tax laws.</p>
-            </section>
-
-            <section>
-                <h2 className="text-2xl font-bold text-white mb-4">4. Purpose of Processing</h2>
-                <p className="mb-4">We process your data for the following lawful purposes:</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5"><h3 className="font-bold text-white mb-2">Performance of Contract</h3><p className="text-sm">Issuing your ticket, validating entry at the venue, and processing payments.</p></div>
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5"><h3 className="font-bold text-white mb-2">Legal Obligation</h3><p className="text-sm">Fraud prevention, tax compliance, and cooperation with law enforcement.</p></div>
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5"><h3 className="font-bold text-white mb-2">Legitimate Interest</h3><p className="text-sm">Improving our platform, customer support, and &quot;NeneCoins&quot; loyalty tracking.</p></div>
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5"><h3 className="font-bold text-white mb-2">Consent</h3><p className="text-sm">Sending marketing communications (which you can opt-out of at any time).</p></div>
-                </div>
-            </section>
-
-            <section>
-                <h2 className="text-2xl font-bold text-white mb-4">5. Sharing Data with Event Organizers</h2>
-                <p>When you purchase a ticket, limited data (Your Name and Ticket ID) is shared with the <strong>Event Host</strong>. This is strictly for the purpose of:</p>
-                <ul className="list-disc pl-6 space-y-2 mt-2">
-                    <li>Verifying your identity at the door (Guest List).</li>
-                    <li>Security and crowd control management.</li>
-                </ul>
-                <p className="mt-4 text-sm text-gray-400">Event Organizers are bound by our Data Processing Agreement to not use your data for unauthorized marketing without your separate consent.</p>
-            </section>
-
-            <section className="bg-blue-900/10 border border-blue-500/20 p-6 rounded-2xl">
-                <h2 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2"><Scale className="w-5 h-5" /> 6. Your Rights under Kenyan Law</h2>
-                <p className="mb-4">Under the Data Protection Act 2019, you have the right to:</p>
-                <ul className="space-y-3">
-                    <li className="flex gap-3"><div className="min-w-[6px] h-[6px] rounded-full bg-blue-500 mt-2"></div><span><strong>Right to Access:</strong> Request a copy of the personal data we hold about you.</span></li>
-                    <li className="flex gap-3"><div className="min-w-[6px] h-[6px] rounded-full bg-blue-500 mt-2"></div><span><strong>Right to Rectification:</strong> Ask us to correct false or misleading data.</span></li>
-                    <li className="flex gap-3"><div className="min-w-[6px] h-[6px] rounded-full bg-blue-500 mt-2"></div><span><strong>Right to Erasure (&quot;Right to be Forgotten&quot;):</strong> Ask us to delete your personal data where there is no legal reason to keep it.</span></li>
-                    <li className="flex gap-3"><div className="min-w-[6px] h-[6px] rounded-full bg-blue-500 mt-2"></div><span><strong>Right to Object:</strong> Object to processing of all or part of your personal data.</span></li>
-                </ul>
-            </section>
-
-            <section>
-                <h2 className="text-2xl font-bold text-white mb-4">7. Contact Data Controller</h2>
-                <p className="mb-6">If you wish to exercise any of your rights or have questions about this policy, please contact our Data Protection Officer:</p>
-                <div className="flex flex-col md:flex-row gap-6">
-                    <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10 w-fit">
-                        <div className="bg-blue-600 p-3 rounded-full text-white"><Mail className="w-5 h-5" /></div>
-                        <div><div className="text-xs text-gray-400 uppercase font-bold">Email Us</div><div className="text-white font-bold">privacy@nenetickets.co.ke</div></div>
-                    </div>
-                    <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10 w-fit">
-                        <div className="bg-gray-700 p-3 rounded-full text-white"><FileText className="w-5 h-5" /></div>
-                        <div><div className="text-xs text-gray-400 uppercase font-bold">Office</div><div className="text-white font-bold">Nairobi, Kenya</div></div>
-                    </div>
-                </div>
-            </section>
-        </div>
-        
-        <div className="mt-20 pt-8 border-t border-white/10 text-center">
-            <Link href="/"><button className="text-gray-500 hover:text-white transition text-sm">&larr; Back to Home</button></Link>
+        <div className="mt-16 pt-8 border-t border-white/10 flex flex-wrap gap-4 text-sm text-gray-500">
+          <Link href="/terms" className="hover:text-white transition">Terms of Service</Link>
+          <Link href="/support" className="hover:text-white transition">Support</Link>
+          <Link href="/" className="hover:text-white transition">Back to Home</Link>
         </div>
       </div>
     </main>

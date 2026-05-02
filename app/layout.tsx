@@ -22,8 +22,8 @@ export const metadata: Metadata = {
     title: "NeneTickets",
   },
   icons: {
-    icon: "/icons/icon-192x192.png",
-    apple: "/icons/apple-touch-icon.png",
+    icon: "/icon-192x192.png",
+    apple: "/apple-touch-icon.png",
   },
   other: {
     "mobile-web-app-capable": "yes",

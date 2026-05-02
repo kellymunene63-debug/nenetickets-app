@@ -28,12 +28,32 @@ declare global {
   }
 }
 
-const PROMO_CODES: Record<string, number> = {
-  NENE10: 10,
-  LAUNCH20: 20,
-  STUDENT15: 15,
-  KENYA25: 25,
+interface PromoCode {
+  discount: number;       // percent (1-100) or fixed KES amount
+  type: "percent" | "fixed";
+  description: string;
+  active: boolean;
+}
+
+// Default codes — organizer can override via the host portal (stored in localStorage)
+const DEFAULT_PROMO_CODES: Record<string, PromoCode> = {
+  NENE10:    { discount: 10,  type: "percent", description: "10% off — NeneTickets special",   active: true },
+  WELCOME20: { discount: 20,  type: "percent", description: "20% off — new user welcome",      active: true },
+  STUDENT15: { discount: 15,  type: "percent", description: "15% off — student discount",      active: true },
+  EARLYBIRD: { discount: 20,  type: "percent", description: "20% off — early bird deal",       active: true },
+  NAIROBI25: { discount: 25,  type: "percent", description: "25% off — Nairobi locals",        active: true },
+  FRIYAY:    { discount: 15,  type: "percent", description: "15% off — Friday special",        active: true },
+  VIP500:    { discount: 500, type: "fixed",   description: "KES 500 off any ticket",          active: true },
+  LAUNCH50:  { discount: 50,  type: "percent", description: "50% off — launch celebration",    active: false },
 };
+
+function getPromoCodes(): Record<string, PromoCode> {
+  try {
+    const stored = localStorage.getItem("nene_promo_codes");
+    if (stored) return { ...DEFAULT_PROMO_CODES, ...JSON.parse(stored) };
+  } catch { /* silent */ }
+  return DEFAULT_PROMO_CODES;
+}
 
 function generateTicketId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -58,13 +78,16 @@ function CheckoutContent() {
   const total      = price * quantity;
   const serviceFee = Math.round(total * 0.03);
 
-  const [promoInput, setPromoInput]     = useState("");
-  const [promoCode, setPromoCode]       = useState("");
+  const [promoInput, setPromoInput]       = useState("");
+  const [promoCode, setPromoCode]         = useState("");
   const [promoDiscount, setPromoDiscount] = useState(0);
-  const [promoError, setPromoError]     = useState("");
+  const [promoType, setPromoType]         = useState<"percent" | "fixed">("percent");
+  const [promoError, setPromoError]       = useState("");
 
-  const discountAmount = Math.round((total * promoDiscount) / 100);
-  const grandTotal     = total + serviceFee - discountAmount;
+  const discountAmount = promoType === "fixed"
+    ? Math.min(promoDiscount, total)
+    : Math.round((total * promoDiscount) / 100);
+  const grandTotal = Math.max(0, total + serviceFee - discountAmount);
 
   const [step, setStep]           = useState<CheckoutStep>("summary");
   const [email, setEmail]         = useState("");
@@ -107,16 +130,19 @@ function CheckoutContent() {
   const applyPromo = () => {
     const code = promoInput.trim().toUpperCase();
     if (!code) { setPromoError("Enter a promo code"); return; }
-    const discount = PROMO_CODES[code];
-    if (!discount) { setPromoError("Invalid promo code"); return; }
-    setPromoDiscount(discount);
+    const codes = getPromoCodes();
+    const found = codes[code];
+    if (!found) { setPromoError("Invalid promo code. Please check and try again."); return; }
+    if (!found.active) { setPromoError("This promo code has expired."); return; }
+    setPromoDiscount(found.discount);
+    setPromoType(found.type);
     setPromoCode(code);
     setPromoError("");
     setPromoInput("");
   };
 
   const removePromo = () => {
-    setPromoCode(""); setPromoDiscount(0); setPromoInput(""); setPromoError("");
+    setPromoCode(""); setPromoDiscount(0); setPromoType("percent"); setPromoInput(""); setPromoError("");
   };
 
   const handlePaymentSuccess = useCallback(async (reference: string) => {
@@ -405,7 +431,7 @@ function CheckoutContent() {
             {promoDiscount > 0 && (
               <div className="flex justify-between text-green-400">
                 <span className="flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5" /> {promoCode} ({promoDiscount}% off)
+                  <Tag className="w-3.5 h-3.5" /> {promoCode} ({promoType === "fixed" ? `KES ${promoDiscount} off` : `${promoDiscount}% off`})
                   <button onClick={removePromo} className="text-gray-600 hover:text-red-400 transition">
                     <X className="w-3 h-3" />
                   </button>

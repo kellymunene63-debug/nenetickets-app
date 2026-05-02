@@ -73,6 +73,7 @@ function CheckoutContent() {
   const [ticketId]                = useState(() => generateTicketId());
   const [paystackLoaded, setPaystackLoaded] = useState(false);
   const [confirmedRef, setConfirmedRef] = useState("");
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
 
   // Load Paystack inline script
   useEffect(() => {
@@ -130,11 +131,67 @@ function CheckoutContent() {
 
       setConfirmedRef(reference);
       setStep("confirmed");
+
+      // Send confirmation email (fire-and-forget — never blocks checkout)
+      fetch("/api/email/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          title, type, quantity,
+          date, time, location, image,
+          ticketId, grandTotal, reference,
+        }),
+      })
+        .then((r) => r.json())
+        .then((d: { sent: boolean }) => setEmailSent(d.sent))
+        .catch(() => setEmailSent(false));
     } catch {
       setPayError("Verification failed. Contact support if money was deducted.");
       setStep("summary");
     }
-  }, [ticketId, title, type, grandTotal, quantity, date, time, location, image]);
+  }, [ticketId, title, type, grandTotal, quantity, date, time, location, image, email]);
+
+  // For free tickets — skip Paystack, generate ticket directly
+  const claimFreeTicket = useCallback(() => {
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Enter a valid email address");
+      return;
+    }
+    setEmailError("");
+    setStep("paying");
+
+    const freeRef = `FREE-${ticketId}-${Date.now()}`;
+
+    const ticket = {
+      id: ticketId,
+      title, type, price: 0, quantity,
+      date, time, location, image,
+      purchasedAt: new Date().toISOString(),
+      reference: freeRef,
+    };
+    const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
+    existing.push(ticket);
+    localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
+
+    setConfirmedRef(freeRef);
+    setStep("confirmed");
+
+    // Send confirmation email
+    fetch("/api/email/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        title, type, quantity,
+        date, time, location, image,
+        ticketId, grandTotal: 0, reference: freeRef,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d: { sent: boolean }) => setEmailSent(d.sent))
+      .catch(() => setEmailSent(false));
+  }, [ticketId, title, type, quantity, date, time, location, image, email]);
 
   const openPaystack = () => {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -222,6 +279,25 @@ function CheckoutContent() {
               {confirmedRef && (
                 <p className="text-xs text-gray-600 mt-1 font-mono">Paystack ref: {confirmedRef}</p>
               )}
+
+              {/* Email sent indicator */}
+              <div className="mt-4">
+                {emailSent === null && (
+                  <p className="text-xs text-gray-600 flex items-center justify-center gap-1.5">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Sending confirmation email…
+                  </p>
+                )}
+                {emailSent === true && (
+                  <p className="text-xs text-green-500 flex items-center justify-center gap-1.5">
+                    <CheckCircle2 className="w-3 h-3" /> Confirmation sent to {email}
+                  </p>
+                )}
+                {emailSent === false && (
+                  <p className="text-xs text-gray-600 flex items-center justify-center gap-1.5">
+                    Ticket saved to your account · email delivery pending
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -367,33 +443,51 @@ function CheckoutContent() {
             <p className="text-xs text-gray-600 mt-2">Your ticket confirmation will be sent here.</p>
           </div>
 
-          {/* Pay button */}
-          <button
-            onClick={openPaystack}
-            disabled={!paystackLoaded}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 text-lg"
-          >
-            {!paystackLoaded ? (
-              <><Loader2 className="w-5 h-5 animate-spin" /> Loading payment…</>
-            ) : (
-              <><CreditCard className="w-5 h-5" /> Pay KES {grandTotal.toLocaleString()}</>
-            )}
-          </button>
+          {/* Pay / Claim button */}
+          {grandTotal === 0 ? (
+            <button
+              onClick={claimFreeTicket}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 text-lg"
+            >
+              <Ticket className="w-5 h-5" /> Claim Free Ticket
+            </button>
+          ) : (
+            <button
+              onClick={openPaystack}
+              disabled={!paystackLoaded}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 text-lg"
+            >
+              {!paystackLoaded ? (
+                <><Loader2 className="w-5 h-5 animate-spin" /> Loading payment…</>
+              ) : (
+                <><CreditCard className="w-5 h-5" /> Pay KES {grandTotal.toLocaleString()}</>
+              )}
+            </button>
+          )}
 
-          {/* Payment methods */}
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-3 text-xs text-gray-600">
-              <Shield className="w-3.5 h-3.5" /> Secured by Paystack · 256-bit SSL
+          {/* Payment methods / free notice */}
+          {grandTotal === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <p className="text-xs text-green-500 font-bold flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" /> This is a free event — no payment required
+              </p>
+              <p className="text-xs text-gray-600">Enter your email above to receive your ticket instantly.</p>
             </div>
-            <div className="flex items-center gap-3 text-xs text-gray-600">
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>M-Pesa · Visa · Mastercard · Bank Transfer</span>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-3 text-xs text-gray-600">
+                <Shield className="w-3.5 h-3.5" /> Secured by Paystack · 256-bit SSL
+              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-600">
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>M-Pesa · Visa · Mastercard · Bank Transfer</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <ChevronRight className="w-3 h-3 text-gray-700 rotate-180" />
+                <span className="text-xs text-gray-600">You&apos;ll choose your payment method in the next step</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 mt-1">
-              <ChevronRight className="w-3 h-3 text-gray-700 rotate-180" />
-              <span className="text-xs text-gray-600">You&apos;ll choose your payment method in the next step</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import {
   Calendar, MapPin, ArrowLeft, CheckCircle2, Minus, Plus, Share2,
-  Copy, Twitter, MessageCircle, Info, Eye, Clock, Tag, Sparkles, ArrowRight
+  Copy, Twitter, MessageCircle, Info, Eye, Clock, Tag, Sparkles, ArrowRight, XCircle
 } from "lucide-react";
 
 // ── Hardcoded events ─────────────────────────────────────────────────────────
@@ -154,32 +154,30 @@ function getDaysUntil(dateStr: string): number | null {
 export default function EventPage({ params }: { params: { id: string } }) {
   const staticEvent = EVENTS_DB[params.id] ?? null;
 
-  // For hosted (localStorage) events
   const [localEvent, setLocalEvent] = useState<EventData | null>(null);
   const [loadingLocal, setLoadingLocal] = useState(!staticEvent);
-
-  // Recommendations — includes localStorage events
   const [allLocalEvents, setAllLocalEvents] = useState<{ id: string; data: EventData }[]>([]);
 
   useEffect(() => {
-    // Fetch from KV database (cross-browser) with localStorage fallback
     fetch("/api/events")
       .then((r) => r.json())
       .then((stored: {
         id: string; title: string; description?: string; date: string; time?: string;
         location: string; image: string; category: string; aiTag?: string;
+        cancelled?: boolean; cancelReason?: string;
         tickets?: { name: string; price: string; capacity?: string }[];
       }[]) => {
         if (!Array.isArray(stored)) return;
         const localList = stored.map((ev) => ({ id: ev.id, data: normaliseLocalEvent(ev) }));
         setAllLocalEvents(localList);
-        if (!staticEvent) {
-          const found = stored.find((ev) => ev.id === params.id);
-          if (found) setLocalEvent(normaliseLocalEvent(found));
+        const found = stored.find((ev) => ev.id === params.id);
+        if (found) {
+          setEventCancelled(!!found.cancelled);
+          setEventCancelReason(found.cancelReason ?? "");
+          if (!staticEvent) setLocalEvent(normaliseLocalEvent(found));
         }
       })
       .catch(() => {
-        // Fallback to localStorage
         try {
           const stored = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
           const localList = stored.map((ev: { id: string }) => ({ id: ev.id, data: normaliseLocalEvent(ev as Parameters<typeof normaliseLocalEvent>[0]) }));
@@ -195,6 +193,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
   const event: EventData | null = staticEvent ?? localEvent;
 
+  const [eventCancelled, setEventCancelled] = useState(false);
+  const [eventCancelReason, setEventCancelReason] = useState("");
+
   const [selectedTicket, setSelectedTicket] = useState<"regular" | "vip">("regular");
   const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
@@ -203,10 +204,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
   const daysUntil = event ? getDaysUntil(event.date) : null;
 
-  // Recommendations: same category first, then others — exclude current, max 3
   const recommendations = useMemo(() => {
     if (!event) return [];
-    // Combine EVENTS_DB + localStorage events
     const dbEntries = Object.entries(EVENTS_DB)
       .filter(([id]) => id !== params.id)
       .map(([id, e]) => ({ id, ...e }));
@@ -219,7 +218,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
     return [...sameCategory, ...others].slice(0, 3);
   }, [params.id, event, allLocalEvents]);
 
-  // Fetch capacity data for hosted events
   useEffect(() => {
     fetch(`/api/events/${params.id}/capacity`)
       .then((r) => r.ok ? r.json() : {})
@@ -227,7 +225,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
       .catch(() => {});
   }, [params.id]);
 
-  // Register viewer + poll
   useEffect(() => {
     if (!event) return;
     const register = async () => {
@@ -249,7 +246,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
     return () => clearInterval(interval);
   }, [params.id, event]);
 
-  // ── Loading state ─────────────────────────────────────────────────────────
   if (loadingLocal) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -259,7 +255,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
     );
   }
 
-  // ── Not found ─────────────────────────────────────────────────────────────
   if (!event) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center flex-col gap-4 pt-20">
@@ -274,8 +269,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
     );
   }
 
-  // ── Ticket types ──────────────────────────────────────────────────────────
-  // For hosted events with custom ticket types, use them; else use Regular/VIP
   const hasCustomTickets = (event.ticketTypes?.length ?? 0) > 0;
   const regularLabel = hasCustomTickets ? (event.ticketTypes![0].name) : "Regular Admission";
   const vipLabel = hasCustomTickets && event.ticketTypes!.length > 1
@@ -288,7 +281,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const currentPrice = selectedTicket === "regular" ? regularPrice : vipPrice;
   const totalPrice = currentPrice * quantity;
 
-  // Sold-out checks
   const regularCapData = capacity[regularLabel];
   const vipCapData     = capacity[vipLabel];
   const regularSoldOut = regularCapData?.soldOut ?? false;
@@ -309,7 +301,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   };
 
   const selectedTicketName = selectedTicket === "regular" ? regularLabel : vipLabel;
-  const checkoutUrl = `/checkout?title=${encodeURIComponent(event.title)}&type=${encodeURIComponent(selectedTicketName)}&price=${currentPrice}&quantity=${quantity}&date=${encodeURIComponent(event.date)}&time=${encodeURIComponent(event.time)}&location=${encodeURIComponent(event.location)}&image=${encodeURIComponent(event.image)}`;
+  const checkoutUrl = `/checkout?title=${encodeURIComponent(event.title)}&type=${encodeURIComponent(selectedTicketName)}&price=${currentPrice}&quantity=${quantity}&date=${encodeURIComponent(event.date)}&time=${encodeURIComponent(event.time)}&location=${encodeURIComponent(event.location)}&image=${encodeURIComponent(event.image)}&eventId=${encodeURIComponent(params.id)}`;
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -345,6 +337,28 @@ export default function EventPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
+      {/* Cancellation Banner */}
+      {eventCancelled && (
+        <div className="container mx-auto px-6 pt-6">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-red-400 text-base">This event has been cancelled</p>
+              {eventCancelReason && (
+                <p className="text-gray-400 text-sm mt-1">{eventCancelReason}</p>
+              )}
+              <p className="text-gray-500 text-sm mt-1">
+                If you purchased a ticket, please contact the organiser or{" "}
+                <a href="mailto:support@nenetickets.co.ke" className="text-blue-400 hover:underline">
+                  support@nenetickets.co.ke
+                </a>{" "}
+                for a refund. Refunds are processed within 7–14 business days.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-5 gap-10">
 
         {/* LEFT: Content */}
@@ -357,7 +371,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
             </p>
           </section>
 
-          {/* Live viewers */}
           {viewers !== null && (
             <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400">
               <Eye className="w-5 h-5 flex-shrink-0 animate-pulse" />
@@ -456,7 +469,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
               </div>
             </div>
 
-            {/* VIP — only shown if there's a second ticket type */}
+            {/* VIP */}
             {hasVip && (
               <div
                 onClick={() => !vipSoldOut && setSelectedTicket("vip")}
@@ -565,7 +578,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* ── You might also like ────────────────────────────────────────────── */}
+      {/* You might also like */}
       {recommendations.length > 0 && (
         <section className="border-t border-white/5 bg-white/[0.02] py-16">
           <div className="container mx-auto px-6">

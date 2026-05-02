@@ -24,15 +24,15 @@ const LINKS = {
 };
 
 const SOCIALS = [
-  { icon: Twitter, href: "#", label: "Twitter" },
-  { icon: Instagram, href: "#", label: "Instagram" },
-  { icon: Facebook, href: "#", label: "Facebook" },
-  { icon: MessageCircle, href: "https://wa.me/254700000000", label: "WhatsApp" },
+  { icon: Twitter, href: "#", label: "Twitter", color: "hover:bg-sky-500/20 hover:border-sky-500/40 hover:text-sky-400" },
+  { icon: Instagram, href: "#", label: "Instagram", color: "hover:bg-pink-500/20 hover:border-pink-500/40 hover:text-pink-400" },
+  { icon: Facebook, href: "#", label: "Facebook", color: "hover:bg-blue-500/20 hover:border-blue-500/40 hover:text-blue-400" },
+  { icon: MessageCircle, href: "https://wa.me/254794588860", label: "WhatsApp", color: "hover:bg-green-500/20 hover:border-green-500/40 hover:text-green-400" },
 ];
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/5 bg-black/60 backdrop-blur-sm mt-auto">
+    <footer className="border-t border-white/10 bg-[#07071a] mt-auto">
       <div className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
 
@@ -43,10 +43,11 @@ export default function Footer() {
                 <Ticket className="w-5 h-5 text-white transform -rotate-45" />
               </div>
               <span className="text-xl font-bold tracking-tight text-white">
-                Nene<span className="text-blue-500">Tickets</span>
+                Nene<span className="text-blue-400">Tickets</span>
               </span>
             </Link>
-            <p className="text-gray-500 text-sm leading-relaxed mb-6 max-w-xs">
+
+            <p className="text-gray-400 text-sm leading-relaxed mb-6 max-w-xs">
               Kenya&apos;s fastest ticket platform. Book concerts, matches, and conferences — pay with M-Pesa in seconds.
             </p>
 
@@ -55,19 +56,19 @@ export default function Footer() {
               <div className="w-5 h-5 bg-[#00A651] rounded-full flex items-center justify-center flex-shrink-0">
                 <span className="text-white text-[8px] font-black">M</span>
               </div>
-              <span className="text-xs text-gray-400 font-bold">M-Pesa Accepted</span>
+              <span className="text-xs text-gray-300 font-bold">M-Pesa Accepted</span>
             </div>
 
             {/* Socials */}
             <div className="flex gap-3">
-              {SOCIALS.map(({ icon: Icon, href, label }) => (
+              {SOCIALS.map(({ icon: Icon, href, label, color }) => (
                 <a
                   key={label}
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="w-9 h-9 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex items-center justify-center text-gray-500 hover:text-white transition"
+                  className={`w-10 h-10 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-gray-400 transition-all duration-200 ${color}`}
                 >
                   <Icon className="w-4 h-4" />
                 </a>
@@ -78,13 +79,13 @@ export default function Footer() {
           {/* Link columns */}
           {Object.entries(LINKS).map(([heading, items]) => (
             <div key={heading}>
-              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">{heading}</h3>
-              <ul className="space-y-3">
+              <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-5">{heading}</h3>
+              <ul className="space-y-3.5">
                 {items.map(({ label, href }) => (
                   <li key={label}>
                     <Link
                       href={href}
-                      className="text-sm text-gray-400 hover:text-white transition"
+                      className="text-sm text-gray-400 hover:text-white transition-colors duration-150 font-medium"
                     >
                       {label}
                     </Link>
@@ -96,13 +97,13 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-white/5 mt-12 pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+        <div className="border-t border-white/10 mt-12 pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-500">
           <p>© {new Date().getFullYear()} NeneTickets Ltd. All rights reserved.</p>
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-            <span>All systems operational</span>
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+            <span className="text-gray-400">All systems operational</span>
           </div>
-          <p>Built with ❤️ in Nairobi, Kenya</p>
+          <p className="text-gray-500">Built with ❤️ in Nairobi, Kenya</p>
         </div>
       </div>
     </footer>

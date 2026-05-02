@@ -398,7 +398,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
             </p>
           </div>
 
-          <ReviewSection />
+          <ReviewSection eventId={params.id} />
         </div>
 
         {/* RIGHT: Sticky sidebar */}

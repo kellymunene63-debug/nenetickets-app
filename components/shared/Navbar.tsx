@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 const NAV_LINKS = [
   { href: "/events", label: "Browse Events" },
+  { href: "/about", label: "About" },
   { href: "/support", label: "Support" },
 ];
 

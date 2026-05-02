@@ -1,30 +1,77 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "../../components/shared/Navbar";
 import {
   Upload, CheckCircle2, DollarSign, Sparkles, Plus, Trash2, Tag,
   BarChart3, Users, ArrowLeft, LogOut, Eye, EyeOff, Lock,
-  ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar
+  ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar,
+  ExternalLink, Edit2, MapPin, FileText, Hash, ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 
+interface TicketType {
+  name: string;
+  price: string;
+  capacity: string;
+}
+
+interface OrganizerEvent {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  price: string;
+  image: string;
+  category: string;
+  aiTag: string;
+  tickets: TicketType[];
+  organizerEmail: string;
+  createdAt: string;
+}
+
+interface Host {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  joined: string;
+}
+
+const STOCK_IMAGES = [
+  { label: "Concert / Music", value: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070" },
+  { label: "Sports Event", value: "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931" },
+  { label: "Conference / Business", value: "https://images.unsplash.com/photo-1544531586-fde5298cdd40?q=80&w=2070" },
+  { label: "Art Exhibition", value: "https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=2079" },
+  { label: "Nightlife / Club", value: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=2070" },
+  { label: "Tech / Startup", value: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=2070" },
+];
+
 export default function HostPage() {
   const [view, setView] = useState("loading");
-  const [host, setHost] = useState<any>(null);
-  const [myEvents, setMyEvents] = useState<any[]>([]);
+  const [host, setHost] = useState<Host | null>(null);
+  const [myEvents, setMyEvents] = useState<OrganizerEvent[]>([]);
   const [soldTickets, setSoldTickets] = useState<any[]>([]);
-  const [stats, setStats] = useState({ revenue: 0, attendees: 0, events: 0 });
+  const [stats, setStats] = useState({ revenue: 0, attendees: 0, events: 0, capacity: 0 });
 
   const [formData, setFormData] = useState({
-    title: "", location: "", date: "", category: "Music",
-    image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070",
+    title: "",
+    description: "",
+    location: "",
+    date: "",
+    time: "",
+    category: "Music",
+    image: STOCK_IMAGES[0].value,
   });
-  const [tickets, setTickets] = useState([{ name: "Regular", price: "2500" }]);
-  const [newTicket, setNewTicket] = useState({ name: "", price: "" });
+  const [tickets, setTickets] = useState<TicketType[]>([{ name: "Regular", price: "2500", capacity: "100" }]);
+  const [newTicket, setNewTicket] = useState<TicketType>({ name: "", price: "", capacity: "" });
   const [isPublished, setIsPublished] = useState(false);
+  const [publishedId, setPublishedId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<OrganizerEvent | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -32,15 +79,52 @@ export default function HostPage() {
   const [authError, setAuthError] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
 
+  const loadDashboardData = useCallback((currentHost?: Host) => {
+    const activeHost = currentHost ?? host;
+    if (!activeHost) return;
+
+    const allEvents: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
+    const allSold: any[] = JSON.parse(localStorage.getItem("nene_sold_tickets") || "[]");
+
+    // Only show this organizer's events
+    const mine = allEvents.filter(
+      (ev) => !ev.organizerEmail || ev.organizerEmail === activeHost.email
+    );
+
+    setMyEvents(mine);
+    setSoldTickets(allSold);
+
+    let totalRevenue = 0;
+    let totalCapacity = 0;
+
+    mine.forEach((ev) => {
+      const sold = allSold.filter((t) => t.title === ev.title || t.eventTitle === ev.title).length;
+      const lowestPrice = ev.tickets?.length
+        ? Math.min(...ev.tickets.map((t) => parseInt(t.price) || 0))
+        : parseInt(ev.price?.replace(/[^0-9]/g, "") || "0");
+      totalRevenue += sold * lowestPrice;
+      totalCapacity += ev.tickets?.reduce((acc, t) => acc + (parseInt(t.capacity) || 0), 0) ?? 0;
+    });
+
+    setStats({
+      revenue: totalRevenue,
+      attendees: allSold.length,
+      events: mine.length,
+      capacity: totalCapacity,
+    });
+  }, [host]);
+
   useEffect(() => {
     const savedHost = localStorage.getItem("nene_active_session");
     if (savedHost) {
-      setHost(JSON.parse(savedHost));
-      loadDashboardData();
+      const parsed: Host = JSON.parse(savedHost);
+      setHost(parsed);
+      loadDashboardData(parsed);
       setView("dashboard");
     } else {
       setView("auth");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkPasswordStrength = (pass: string) => {
@@ -64,17 +148,17 @@ export default function HostPage() {
     const confirmPassword = (form.elements.namedItem("confirmPassword") as HTMLInputElement).value;
 
     if (password !== confirmPassword) { setAuthError("Passwords do not match."); return; }
-    if (passwordStrength < 3) { setAuthError("Password is too weak."); return; }
+    if (passwordStrength < 3) { setAuthError("Password is too weak. Add uppercase, numbers, and symbols."); return; }
 
-    const newHost = { name, email, phone, password, joined: new Date().toLocaleDateString() };
-    const existingUsers = JSON.parse(localStorage.getItem("nene_users_db") || "[]");
-    if (existingUsers.find((u: any) => u.email === email)) { setAuthError("Account already exists."); return; }
+    const newHost: Host = { name, email, phone, password, joined: new Date().toLocaleDateString("en-KE") };
+    const existingUsers: Host[] = JSON.parse(localStorage.getItem("nene_users_db") || "[]");
+    if (existingUsers.find((u) => u.email === email)) { setAuthError("An account with this email already exists."); return; }
 
     existingUsers.push(newHost);
     localStorage.setItem("nene_users_db", JSON.stringify(existingUsers));
     localStorage.setItem("nene_active_session", JSON.stringify(newHost));
     setHost(newHost);
-    loadDashboardData();
+    loadDashboardData(newHost);
     setView("dashboard");
   };
 
@@ -85,15 +169,15 @@ export default function HostPage() {
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
-    const existingUsers = JSON.parse(localStorage.getItem("nene_users_db") || "[]");
-    const foundUser = existingUsers.find((u: any) => u.email === email && u.password === password);
+    const existingUsers: Host[] = JSON.parse(localStorage.getItem("nene_users_db") || "[]");
+    const foundUser = existingUsers.find((u) => u.email === email && u.password === password);
     if (foundUser) {
       localStorage.setItem("nene_active_session", JSON.stringify(foundUser));
       setHost(foundUser);
-      loadDashboardData();
+      loadDashboardData(foundUser);
       setView("dashboard");
     } else {
-      setAuthError("Invalid email or password.");
+      setAuthError("Invalid email or password. Please try again.");
     }
   };
 
@@ -104,78 +188,120 @@ export default function HostPage() {
     setAuthMode("login");
   };
 
-  const loadDashboardData = () => {
-    const allEvents: any[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
-    const allSold: any[] = JSON.parse(localStorage.getItem("nene_sold_tickets") || "[]");
-
-    setMyEvents(allEvents);
-    setSoldTickets(allSold);
-
-    // Calculate real revenue from actual ticket sales
-    let totalRevenue = 0;
-    allSold.forEach((ticket: any) => {
-      const matchedEvent = allEvents.find((ev: any) =>
-        ev.title === ticket.eventTitle
-      );
-      if (matchedEvent) {
-        const priceStr = matchedEvent.price?.replace(/[^0-9]/g, "") || "0";
-        totalRevenue += parseInt(priceStr) || 0;
-      }
-    });
-
-    setStats({
-      revenue: totalRevenue,
-      attendees: allSold.length,
-      events: allEvents.length,
-    });
-  };
-
   const getTicketsSoldForEvent = (eventTitle: string) => {
-    return soldTickets.filter((t: any) => t.eventTitle === eventTitle).length;
+    return soldTickets.filter((t: any) => t.title === eventTitle || t.eventTitle === eventTitle).length;
   };
 
-  const getRevenueForEvent = (event: any) => {
+  const getRevenueForEvent = (event: OrganizerEvent) => {
     const sold = getTicketsSoldForEvent(event.title);
-    const priceStr = event.price?.replace(/[^0-9]/g, "") || "0";
-    return sold * (parseInt(priceStr) || 0);
+    const lowestPrice = event.tickets?.length
+      ? Math.min(...event.tickets.map((t) => parseInt(t.price) || 0))
+      : parseInt(event.price?.replace(/[^0-9]/g, "") || "0");
+    return sold * lowestPrice;
+  };
+
+  const getTotalCapacityForEvent = (event: OrganizerEvent) => {
+    return event.tickets?.reduce((acc, t) => acc + (parseInt(t.capacity) || 0), 0) ?? 0;
   };
 
   const handleDeleteEvent = (eventId: string) => {
-    const updated = myEvents.filter((ev: any) => ev.id !== eventId);
+    const allEvents: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
+    const updated = allEvents.filter((ev) => ev.id !== eventId);
     localStorage.setItem("nene_events", JSON.stringify(updated));
-    setMyEvents(updated);
     setDeleteConfirm(null);
     loadDashboardData();
+  };
+
+  const startEditEvent = (event: OrganizerEvent) => {
+    setEditingEvent(event);
+    setFormData({
+      title: event.title,
+      description: event.description || "",
+      location: event.location,
+      date: event.date,
+      time: event.time || "",
+      category: event.category,
+      image: event.image,
+    });
+    setTickets(event.tickets?.length ? event.tickets : [{ name: "Regular", price: "2500", capacity: "100" }]);
+    setIsPublished(false);
+    setView("create");
+  };
+
+  const resetCreateForm = () => {
+    setEditingEvent(null);
+    setFormData({
+      title: "", description: "", location: "", date: "", time: "",
+      category: "Music", image: STOCK_IMAGES[0].value,
+    });
+    setTickets([{ name: "Regular", price: "2500", capacity: "100" }]);
+    setIsPublished(false);
   };
 
   const handlePublish = () => {
     if (!formData.title || !formData.date || !formData.location) return;
     setIsLoading(true);
+
     const lowestPrice = tickets.length > 0
       ? Math.min(...tickets.map((t) => parseInt(t.price) || 0))
       : 0;
-    const newEvent = {
-      id: Date.now().toString(),
-      title: formData.title,
-      date: formData.date,
-      location: formData.location,
-      price: `KES ${lowestPrice.toLocaleString()}`,
-      image: formData.image,
-      category: formData.category,
-      aiTag: "New Added ✨",
-      tickets,
-    };
-    setTimeout(() => {
-      const existing = JSON.parse(localStorage.getItem("nene_events") || "[]");
-      existing.unshift(newEvent);
-      localStorage.setItem("nene_events", JSON.stringify(existing));
-      setIsLoading(false);
-      setIsPublished(true);
-      loadDashboardData();
-    }, 1500);
+
+    const allEvents: OrganizerEvent[] = JSON.parse(localStorage.getItem("nene_events") || "[]");
+
+    if (editingEvent) {
+      // Update existing event
+      const idx = allEvents.findIndex((ev) => ev.id === editingEvent.id);
+      if (idx !== -1) {
+        allEvents[idx] = {
+          ...allEvents[idx],
+          title: formData.title,
+          description: formData.description,
+          date: formData.date,
+          time: formData.time,
+          location: formData.location,
+          price: `KES ${lowestPrice.toLocaleString()}`,
+          image: formData.image,
+          category: formData.category,
+          tickets,
+        };
+      }
+      setTimeout(() => {
+        localStorage.setItem("nene_events", JSON.stringify(allEvents));
+        setPublishedId(editingEvent.id);
+        setIsLoading(false);
+        setIsPublished(true);
+        loadDashboardData();
+      }, 1200);
+    } else {
+      // Create new event
+      const id = Date.now().toString();
+      const newEvent: OrganizerEvent = {
+        id,
+        title: formData.title,
+        description: formData.description,
+        date: formData.date,
+        time: formData.time,
+        location: formData.location,
+        price: `KES ${lowestPrice.toLocaleString()}`,
+        image: formData.image,
+        category: formData.category,
+        aiTag: "New Added ✨",
+        tickets,
+        organizerEmail: host?.email ?? "",
+        createdAt: new Date().toISOString(),
+      };
+      setTimeout(() => {
+        allEvents.unshift(newEvent);
+        localStorage.setItem("nene_events", JSON.stringify(allEvents));
+        setPublishedId(id);
+        setIsLoading(false);
+        setIsPublished(true);
+        loadDashboardData();
+      }, 1200);
+    }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,90 +311,107 @@ export default function HostPage() {
 
   const addTicket = () => {
     if (newTicket.name && newTicket.price) {
-      setTickets([...tickets, newTicket]);
-      setNewTicket({ name: "", price: "" });
+      setTickets([...tickets, { ...newTicket, capacity: newTicket.capacity || "50" }]);
+      setNewTicket({ name: "", price: "", capacity: "" });
     }
   };
 
   const removeTicket = (index: number) => setTickets(tickets.filter((_, i) => i !== index));
 
+  // ─── LOADING ─────────────────────────────────────────────────────────────────
+  if (view === "loading") {
+    return (
+      <main className="min-h-screen bg-[#050511] text-white flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </main>
+    );
+  }
+
   // ─── AUTH VIEW ───────────────────────────────────────────────────────────────
   if (view === "auth") {
     return (
-      <main className="min-h-screen bg-black text-white">
+      <main className="min-h-screen bg-[#050511] text-white">
         <Navbar />
         <div className="flex items-center justify-center min-h-screen p-4 pt-24">
-        <div className="max-w-md w-full bg-white/5 border border-white/10 p-8 rounded-3xl backdrop-blur-md relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <ShieldCheck className="w-32 h-32" />
-          </div>
-          <div className="text-center mb-8 relative z-10">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg shadow-blue-600/20">🔒</div>
-            <h1 className="text-2xl font-bold">{authMode === "login" ? "Organizer Login" : "Secure Sign Up"}</h1>
-            <p className="text-gray-400 text-sm">Access your NeneTickets dashboard safely.</p>
-          </div>
+          <div className="max-w-md w-full bg-white/5 border border-white/10 p-8 rounded-3xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-5">
+              <ShieldCheck className="w-40 h-40" />
+            </div>
 
-          {authError && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl mb-6 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" /> {authError}
+            <div className="text-center mb-8 relative z-10">
+              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-600/30 text-2xl">🎪</div>
+              <h1 className="text-2xl font-bold">{authMode === "login" ? "Organizer Login" : "Create Organizer Account"}</h1>
+              <p className="text-gray-400 text-sm mt-1">Access your NeneTickets organizer dashboard.</p>
             </div>
-          )}
 
-          <form onSubmit={authMode === "login" ? handleLogin : handleSignup} className="space-y-4 relative z-10">
-            {authMode === "signup" && (
-              <>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Business Name</label>
-                  <input name="name" required placeholder="e.g. Nene Events Ltd" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Phone Number</label>
-                  <input name="phone" type="tel" required placeholder="07XX XXX XXX" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition" />
-                </div>
-              </>
-            )}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Email Address</label>
-              <input name="email" type="email" required placeholder="name@company.com" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Password</label>
-              <div className="relative">
-                <input name="password" type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                  onChange={(e) => authMode === "signup" && checkPasswordStrength(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition pr-10" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-500 hover:text-white">
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-            {authMode === "signup" && (
-              <div className="space-y-2">
-                <div className="flex gap-1 h-1">
-                  {[1,2,3,4].map((n) => (
-                    <div key={n} className={`flex-1 rounded-full ${passwordStrength >= n ? (n <= 1 ? "bg-red-500" : n <= 2 ? "bg-yellow-500" : n <= 3 ? "bg-blue-500" : "bg-green-500") : "bg-gray-700"}`} />
-                  ))}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase mt-4">Confirm Password</label>
-                  <input name="confirmPassword" type="password" required placeholder="••••••••" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition" />
-                </div>
+            {authError && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl mb-6 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {authError}
               </div>
             )}
-            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20">
-              <Lock className="w-4 h-4" /> {authMode === "login" ? "Secure Login" : "Create Account"}
-            </button>
-          </form>
 
-          <div className="mt-6 text-center text-sm">
-            <p className="text-gray-400">
-              {authMode === "login" ? "Don't have an account? " : "Already have an account? "}
-              <button onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }} className="text-blue-400 font-bold hover:underline">
-                {authMode === "login" ? "Sign Up" : "Log In"}
+            <form onSubmit={authMode === "login" ? handleLogin : handleSignup} className="space-y-4 relative z-10">
+              {authMode === "signup" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Business / Organizer Name</label>
+                    <input name="name" required placeholder="e.g. Nene Events Ltd" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Phone Number</label>
+                    <input name="phone" type="tel" required placeholder="07XX XXX XXX" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Email Address</label>
+                <input name="email" type="email" required placeholder="name@company.com" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Password</label>
+                <div className="relative">
+                  <input name="password" type={showPassword ? "text" : "password"} required placeholder="••••••••"
+                    onChange={(e) => authMode === "signup" && checkPasswordStrength(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition pr-10 placeholder:text-gray-700" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-500 hover:text-white transition">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {authMode === "signup" && (
+                <>
+                  <div className="space-y-1">
+                    <div className="flex gap-1 h-1.5">
+                      {[1,2,3,4].map((n) => (
+                        <div key={n} className={`flex-1 rounded-full transition-colors ${passwordStrength >= n ? (n <= 1 ? "bg-red-500" : n <= 2 ? "bg-yellow-500" : n <= 3 ? "bg-blue-500" : "bg-green-500") : "bg-gray-800"}`} />
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {passwordStrength === 0 ? "Enter a password" : passwordStrength === 1 ? "Weak — add uppercase & numbers" : passwordStrength === 2 ? "Fair — add symbols" : passwordStrength === 3 ? "Good" : "Strong ✓"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Confirm Password</label>
+                    <input name="confirmPassword" type="password" required placeholder="••••••••" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+                  </div>
+                </>
+              )}
+
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 mt-2">
+                <Lock className="w-4 h-4" /> {authMode === "login" ? "Sign In to Dashboard" : "Create Account"}
               </button>
-            </p>
+            </form>
+
+            <div className="mt-6 text-center text-sm">
+              <p className="text-gray-500">
+                {authMode === "login" ? "New organizer? " : "Already have an account? "}
+                <button onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); setPasswordStrength(0); }} className="text-blue-400 font-bold hover:text-blue-300 transition">
+                  {authMode === "login" ? "Create Account" : "Sign In"}
+                </button>
+              </p>
+            </div>
           </div>
-        </div>
         </div>
       </main>
     );
@@ -276,152 +419,186 @@ export default function HostPage() {
 
   // ─── DASHBOARD VIEW ──────────────────────────────────────────────────────────
   if (view === "dashboard") {
+    const maxRev = Math.max(...myEvents.map((ev) => getRevenueForEvent(ev)), 1);
+
     return (
-      <main className="min-h-screen bg-black text-white">
+      <main className="min-h-screen bg-[#050511] text-white">
         <Navbar />
-        <div className="container mx-auto px-4 py-24">
+        <div className="container mx-auto px-4 py-24 max-w-6xl">
 
           {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
             <div>
-              <p className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-1">Organizer Dashboard</p>
-              <h1 className="text-3xl font-bold mb-1">Welcome back, {host?.name} 👋</h1>
-              <p className="text-gray-400 text-sm">Here&apos;s how your events are performing.</p>
+              <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-1">Organizer Dashboard</p>
+              <h1 className="text-3xl font-bold">Welcome back, {host?.name} 👋</h1>
+              <p className="text-gray-500 text-sm mt-1">{host?.email}</p>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <button onClick={handleLogout} className="text-gray-400 hover:text-white flex items-center gap-2 text-sm font-bold px-4 py-2 border border-white/10 rounded-xl hover:border-white/30 transition">
+              <button onClick={handleLogout} className="text-gray-400 hover:text-white flex items-center gap-2 text-sm font-bold px-4 py-2.5 border border-white/10 rounded-xl hover:border-white/30 transition">
                 <LogOut className="w-4 h-4" /> Logout
               </button>
               <Link href="/validator">
-                <button className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow-lg shadow-purple-900/30">
+                <button className="bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 hover:text-purple-300 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition">
                   <ScanLine className="w-4 h-4" /> Scan Tickets
                 </button>
               </Link>
-              <button onClick={() => { setView("create"); setIsPublished(false); }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow-lg shadow-blue-900/30">
+              <button
+                onClick={() => { resetCreateForm(); setView("create"); }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow-lg shadow-blue-900/30"
+              >
                 <Plus className="w-4 h-4" /> Create Event
               </button>
             </div>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
-            <div className="bg-white/5 border border-white/10 p-6 rounded-2xl hover:border-green-500/30 transition group">
-              <div className="flex items-center gap-2 text-gray-400 font-bold mb-3 text-sm uppercase tracking-wider">
-                <DollarSign className="w-4 h-4 text-green-400" /> Total Revenue
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+            <div className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:border-green-500/30 transition">
+              <div className="flex items-center gap-2 text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">
+                <DollarSign className="w-3.5 h-3.5 text-green-400" /> Revenue
               </div>
-              <div className="text-3xl font-bold mb-1">KES {stats.revenue.toLocaleString()}</div>
-              <p className="text-xs text-gray-500">From {stats.attendees} ticket{stats.attendees !== 1 ? "s" : ""} sold</p>
+              <div className="text-2xl font-bold">KES {stats.revenue.toLocaleString()}</div>
+              <p className="text-xs text-gray-600 mt-0.5">Lifetime earnings</p>
             </div>
-            <div className="bg-white/5 border border-white/10 p-6 rounded-2xl hover:border-blue-500/30 transition">
-              <div className="flex items-center gap-2 text-gray-400 font-bold mb-3 text-sm uppercase tracking-wider">
-                <Users className="w-4 h-4 text-blue-400" /> Attendees
+            <div className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:border-blue-500/30 transition">
+              <div className="flex items-center gap-2 text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">
+                <Ticket className="w-3.5 h-3.5 text-blue-400" /> Sold
               </div>
-              <div className="text-3xl font-bold mb-1">{stats.attendees}</div>
-              <p className="text-xs text-gray-500">Confirmed ticket holders</p>
+              <div className="text-2xl font-bold">{soldTickets.length}</div>
+              <p className="text-xs text-gray-600 mt-0.5">Tickets sold</p>
             </div>
-            <div className="bg-white/5 border border-white/10 p-6 rounded-2xl hover:border-purple-500/30 transition">
-              <div className="flex items-center gap-2 text-gray-400 font-bold mb-3 text-sm uppercase tracking-wider">
-                <BarChart3 className="w-4 h-4 text-purple-400" /> Active Events
+            <div className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:border-purple-500/30 transition">
+              <div className="flex items-center gap-2 text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">
+                <BarChart3 className="w-3.5 h-3.5 text-purple-400" /> Events
               </div>
-              <div className="text-3xl font-bold mb-1">{stats.events}</div>
-              <p className="text-xs text-gray-500">Published & live</p>
+              <div className="text-2xl font-bold">{stats.events}</div>
+              <p className="text-xs text-gray-600 mt-0.5">Published & live</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:border-orange-500/30 transition">
+              <div className="flex items-center gap-2 text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">
+                <Users className="w-3.5 h-3.5 text-orange-400" /> Capacity
+              </div>
+              <div className="text-2xl font-bold">{stats.capacity.toLocaleString()}</div>
+              <p className="text-xs text-gray-600 mt-0.5">Total seats available</p>
             </div>
           </div>
 
           {/* Revenue Chart */}
           {myEvents.length > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-10">
-              <h2 className="text-base font-bold mb-6 flex items-center gap-2">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
+              <h2 className="text-sm font-bold mb-5 flex items-center gap-2 text-gray-300 uppercase tracking-wider">
                 <TrendingUp className="w-4 h-4 text-blue-400" /> Revenue by Event
               </h2>
-              <div className="space-y-3">
-                {(() => {
-                  const maxRev = Math.max(...myEvents.map((ev: any) => getRevenueForEvent(ev)), 1);
-                  return myEvents.map((ev: any) => {
-                    const rev = getRevenueForEvent(ev);
-                    const sold = getTicketsSoldForEvent(ev.title);
-                    const pct = Math.round((rev / maxRev) * 100);
-                    return (
-                      <div key={ev.id}>
-                        <div className="flex items-center justify-between mb-1 text-xs">
-                          <span className="text-gray-400 truncate max-w-[60%] font-bold">{ev.title}</span>
-                          <span className="text-gray-500">{sold} sold · {rev > 0 ? `KES ${rev.toLocaleString()}` : "—"}</span>
-                        </div>
-                        <div className="w-full bg-white/5 rounded-full h-2">
-                          <div
-                            className="h-2 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700"
-                            style={{ width: `${pct}%` }}
-                          />
+              <div className="space-y-4">
+                {myEvents.map((ev) => {
+                  const rev = getRevenueForEvent(ev);
+                  const sold = getTicketsSoldForEvent(ev.title);
+                  const cap = getTotalCapacityForEvent(ev);
+                  const pct = Math.round((rev / maxRev) * 100);
+                  const fillPct = cap > 0 ? Math.round((sold / cap) * 100) : 0;
+                  return (
+                    <div key={ev.id}>
+                      <div className="flex items-center justify-between mb-1.5 text-xs">
+                        <span className="text-gray-300 truncate max-w-[55%] font-bold">{ev.title}</span>
+                        <div className="flex items-center gap-3 text-gray-500 flex-shrink-0">
+                          <span>{sold}/{cap > 0 ? cap : "?"} sold</span>
+                          {cap > 0 && <span className={`font-bold ${fillPct >= 80 ? "text-red-400" : fillPct >= 50 ? "text-yellow-400" : "text-green-400"}`}>{fillPct}%</span>}
+                          <span className="text-white font-bold">{rev > 0 ? `KES ${rev.toLocaleString()}` : "—"}</span>
                         </div>
                       </div>
-                    );
-                  });
-                })()}
+                      <div className="w-full bg-white/5 rounded-full h-2">
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
           {/* Events Table */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-5">
             <h2 className="text-xl font-bold">Your Events</h2>
             {myEvents.length > 0 && (
-              <span className="text-sm text-gray-400">{myEvents.length} event{myEvents.length !== 1 ? "s" : ""} published</span>
+              <span className="text-sm text-gray-500">{myEvents.length} event{myEvents.length !== 1 ? "s" : ""}</span>
             )}
           </div>
 
           {myEvents.length > 0 ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left min-w-[640px]">
-                  <thead className="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
+                <table className="w-full text-left min-w-[700px]">
+                  <thead className="bg-white/5 text-gray-500 text-xs uppercase tracking-wider border-b border-white/5">
                     <tr>
-                      <th className="px-6 py-4">Event</th>
-                      <th className="px-6 py-4"><Calendar className="w-3.5 h-3.5 inline mr-1" />Date</th>
-                      <th className="px-6 py-4"><Ticket className="w-3.5 h-3.5 inline mr-1" />Sold</th>
-                      <th className="px-6 py-4"><TrendingUp className="w-3.5 h-3.5 inline mr-1" />Revenue</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
+                      <th className="px-5 py-4">Event</th>
+                      <th className="px-5 py-4"><Calendar className="w-3 h-3 inline mr-1" />Date</th>
+                      <th className="px-5 py-4"><Ticket className="w-3 h-3 inline mr-1" />Sold / Cap</th>
+                      <th className="px-5 py-4"><DollarSign className="w-3 h-3 inline mr-1" />Revenue</th>
+                      <th className="px-5 py-4">Status</th>
+                      <th className="px-5 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {myEvents.map((event: any) => {
+                    {myEvents.map((event) => {
                       const sold = getTicketsSoldForEvent(event.title);
                       const revenue = getRevenueForEvent(event);
+                      const cap = getTotalCapacityForEvent(event);
                       const isConfirming = deleteConfirm === event.id;
+                      const isPast = event.date ? new Date(event.date) < new Date() : false;
                       return (
-                        <tr key={event.id} className="hover:bg-white/5 transition">
-                          <td className="px-6 py-4">
+                        <tr key={event.id} className="hover:bg-white/[0.03] transition">
+                          <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-lg bg-gray-800 overflow-hidden flex-shrink-0">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={event.image} alt={event.title} className="w-full h-full object-cover" />
                               </div>
-                              <span className="font-bold text-sm">{event.title}</span>
+                              <div>
+                                <p className="font-bold text-sm">{event.title}</p>
+                                <p className="text-xs text-gray-600 mt-0.5">{event.category}</p>
+                              </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-gray-400 text-sm">{event.date}</td>
-                          <td className="px-6 py-4">
-                            <span className={`font-bold text-sm ${sold > 0 ? "text-green-400" : "text-gray-500"}`}>
-                              {sold} ticket{sold !== 1 ? "s" : ""}
+                          <td className="px-5 py-4 text-gray-400 text-sm whitespace-nowrap">{event.date}</td>
+                          <td className="px-5 py-4">
+                            <span className={`font-bold text-sm ${sold > 0 ? "text-green-400" : "text-gray-600"}`}>
+                              {sold}
                             </span>
+                            {cap > 0 && <span className="text-gray-600 text-xs"> / {cap}</span>}
                           </td>
-                          <td className="px-6 py-4 font-mono text-sm font-bold">
-                            {revenue > 0 ? `KES ${revenue.toLocaleString()}` : <span className="text-gray-500">—</span>}
+                          <td className="px-5 py-4 font-mono text-sm font-bold">
+                            {revenue > 0 ? `KES ${revenue.toLocaleString()}` : <span className="text-gray-600">—</span>}
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2 py-1 rounded-full">LIVE</span>
+                          <td className="px-5 py-4">
+                            {isPast
+                              ? <span className="bg-white/10 text-gray-500 text-xs font-bold px-2 py-1 rounded-full">ENDED</span>
+                              : <span className="bg-green-500/15 text-green-400 text-xs font-bold px-2 py-1 rounded-full">LIVE</span>
+                            }
                           </td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-5 py-4 text-right">
                             {isConfirming ? (
                               <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-gray-400">Delete?</span>
+                                <span className="text-xs text-gray-500">Delete?</span>
                                 <button onClick={() => handleDeleteEvent(event.id)} className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1 rounded-lg font-bold hover:bg-red-500/30 transition">Yes</button>
-                                <button onClick={() => setDeleteConfirm(null)} className="text-xs bg-white/10 text-gray-300 px-3 py-1 rounded-lg font-bold hover:bg-white/20 transition">No</button>
+                                <button onClick={() => setDeleteConfirm(null)} className="text-xs bg-white/10 text-gray-400 px-3 py-1 rounded-lg font-bold hover:bg-white/20 transition">No</button>
                               </div>
                             ) : (
-                              <button onClick={() => setDeleteConfirm(event.id)} className="text-gray-500 hover:text-red-400 transition p-1.5 rounded-lg hover:bg-red-500/10" title="Delete event">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Link href={`/event/${event.id}`} target="_blank">
+                                  <button className="text-gray-600 hover:text-blue-400 transition p-1.5 rounded-lg hover:bg-blue-500/10" title="View event">
+                                    <ExternalLink className="w-4 h-4" />
+                                  </button>
+                                </Link>
+                                <button onClick={() => startEditEvent(event)} className="text-gray-600 hover:text-yellow-400 transition p-1.5 rounded-lg hover:bg-yellow-500/10" title="Edit event">
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => setDeleteConfirm(event.id)} className="text-gray-600 hover:text-red-400 transition p-1.5 rounded-lg hover:bg-red-500/10" title="Delete event">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -432,11 +609,11 @@ export default function HostPage() {
               </div>
             </div>
           ) : (
-            <div className="text-center py-24 bg-white/5 rounded-2xl border border-white/10 border-dashed">
-              <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">🎪</div>
+            <div className="text-center py-24 bg-white/5 rounded-2xl border border-dashed border-white/10">
+              <div className="text-5xl mb-4">🎪</div>
               <h3 className="font-bold text-lg mb-2">No events yet</h3>
-              <p className="text-gray-400 mb-6 text-sm">Create your first event and start selling tickets.</p>
-              <button onClick={() => setView("create")} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition inline-flex items-center gap-2">
+              <p className="text-gray-500 text-sm mb-6">Create your first event and start selling tickets today.</p>
+              <button onClick={() => { resetCreateForm(); setView("create"); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition inline-flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Create First Event
               </button>
             </div>
@@ -446,123 +623,183 @@ export default function HostPage() {
     );
   }
 
-  // ─── CREATE EVENT VIEW ───────────────────────────────────────────────────────
+  // ─── CREATE / EDIT EVENT VIEW ────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-[#050511] text-white">
       <Navbar />
-      <div className="container mx-auto px-4 py-24">
-        <button onClick={() => { setView("dashboard"); setIsPublished(false); }} className="mb-8 flex items-center gap-2 text-gray-400 hover:text-white transition font-bold">
+      <div className="container mx-auto px-4 py-24 max-w-6xl">
+        <button onClick={() => { setView("dashboard"); resetCreateForm(); }} className="mb-8 flex items-center gap-2 text-gray-400 hover:text-white transition font-bold text-sm">
           <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </button>
 
         <div className="flex flex-col lg:flex-row gap-12">
-          {/* Form */}
+          {/* ── Form ── */}
           <div className="w-full lg:w-1/2 space-y-8">
             <div>
-              <h1 className="text-4xl font-bold mb-2">Create New Event</h1>
-              <p className="text-gray-400">Fill in the details and launch your event.</p>
+              <h1 className="text-3xl font-bold mb-1">{editingEvent ? "Edit Event" : "Create New Event"}</h1>
+              <p className="text-gray-500 text-sm">{editingEvent ? "Update your event details below." : "Fill in the details and launch your event."}</p>
             </div>
 
             {!isPublished ? (
-              <div className="space-y-6 bg-white/5 border border-white/10 p-8 rounded-3xl">
+              <div className="space-y-5 bg-white/5 border border-white/10 p-7 rounded-3xl">
+
+                {/* Title */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-400 mb-2">Event Title <span className="text-red-400">*</span></label>
-                  <input name="title" onChange={handleChange} placeholder="e.g. Nairobi Rock Festival" className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition" />
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3 h-3" /> Event Title <span className="text-red-400">*</span>
+                  </label>
+                  <input name="title" value={formData.title} onChange={handleChange} placeholder="e.g. Nairobi Rock Festival 2026" className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
                 </div>
 
+                {/* Description */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-400 mb-2">Cover Image</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3 h-3" /> Description
+                  </label>
+                  <textarea name="description" value={formData.description} onChange={handleChange} rows={3} placeholder="Tell attendees what to expect — lineup, dress code, age limit, etc." className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white outline-none focus:border-blue-500 transition resize-none placeholder:text-gray-700 text-sm" />
+                </div>
+
+                {/* Cover Image */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <Upload className="w-3 h-3" /> Cover Image
+                  </label>
                   <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-white/20 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition text-center group">
-                      <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition">
-                        <Upload className="w-5 h-5 text-blue-400" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-white/15 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition text-center group">
+                      <div className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-600/20 transition">
+                        <Upload className="w-4 h-4 text-blue-400" />
                       </div>
-                      <span className="text-sm font-bold text-gray-300">Upload Photo</span>
+                      <span className="text-xs font-bold text-gray-400 group-hover:text-white">Upload Photo</span>
+                      <span className="text-xs text-gray-600 mt-0.5">JPG, PNG, WebP</span>
                     </div>
-                    <select name="image" onChange={handleChange} className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer">
-                      <option value="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070">Stock: Concert</option>
-                      <option value="https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931">Stock: Sports</option>
-                      <option value="https://images.unsplash.com/photo-1544531586-fde5298cdd40?q=80&w=2070">Stock: Conference</option>
-                      <option value="https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=2079">Stock: Art</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        name="image"
+                        value={formData.image}
+                        onChange={handleChange}
+                        className="w-full h-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer text-sm"
+                      >
+                        {STOCK_IMAGES.map((img) => (
+                          <option key={img.value} value={img.value}>{img.label}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                {/* Date + Time */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-2">Date & Time <span className="text-red-400">*</span></label>
-                    <input name="date" type="datetime-local"
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        if (!raw) return;
-                        const formatted = new Date(raw).toLocaleString("en-KE", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
-                        setFormData({ ...formData, date: formatted });
-                      }}
-                      min={new Date().toISOString().slice(0, 16)}
-                      className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition [color-scheme:dark]"
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3" /> Date <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      name="date"
+                      type="date"
+                      value={formData.date}
+                      onChange={handleChange}
+                      min={new Date().toISOString().slice(0, 10)}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white outline-none focus:border-blue-500 transition [color-scheme:dark]"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-2">Location <span className="text-red-400">*</span></label>
-                    <input name="location" onChange={handleChange} placeholder="e.g. KICC, Nairobi" className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition" />
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Time</label>
+                    <input
+                      name="time"
+                      type="time"
+                      value={formData.time}
+                      onChange={handleChange}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white outline-none focus:border-blue-500 transition [color-scheme:dark]"
+                    />
                   </div>
                 </div>
 
+                {/* Location */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-400 mb-2">Category</label>
-                  <select name="category" onChange={handleChange} className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer">
-                    {["Music", "Sports", "Business", "Arts", "Tech", "Nightlife"].map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin className="w-3 h-3" /> Location <span className="text-red-400">*</span>
+                  </label>
+                  <input name="location" value={formData.location} onChange={handleChange} placeholder="e.g. KICC, Nairobi" className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
                 </div>
 
-                {/* Ticket Options */}
-                <div className="bg-black/30 p-6 rounded-2xl border border-white/5">
-                  <label className="block text-sm font-bold text-blue-400 mb-4 flex items-center gap-2">
-                    <Tag className="w-4 h-4" /> Ticket Types
+                {/* Category */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Category</label>
+                  <div className="relative">
+                    <select name="category" value={formData.category} onChange={handleChange} className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer">
+                      {["Music", "Sports", "Business", "Arts", "Tech", "Nightlife", "Food & Drink", "Charity"].map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Ticket Types */}
+                <div className="bg-black/30 p-5 rounded-2xl border border-white/5">
+                  <label className="block text-xs font-bold text-blue-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                    <Tag className="w-3.5 h-3.5" /> Ticket Types & Pricing
                   </label>
-                  <div className="flex gap-3 mb-4">
-                    <input placeholder="Type (e.g. VVIP)" value={newTicket.name} onChange={(e) => setNewTicket({ ...newTicket, name: e.target.value })} className="flex-1 bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500" />
-                    <input type="number" placeholder="KES Price" value={newTicket.price} onChange={(e) => setNewTicket({ ...newTicket, price: e.target.value })} className="w-32 bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500" />
-                    <button onClick={addTicket} className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 p-3 rounded-xl transition border border-blue-500/20">
-                      <Plus className="w-5 h-5" />
+
+                  {/* Add ticket row */}
+                  <div className="grid grid-cols-[1fr_100px_80px_40px] gap-2 mb-4">
+                    <input placeholder="Type name (e.g. VIP)" value={newTicket.name} onChange={(e) => setNewTicket({ ...newTicket, name: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
+                    <input type="number" placeholder="KES" value={newTicket.price} onChange={(e) => setNewTicket({ ...newTicket, price: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
+                    <input type="number" placeholder="Qty" value={newTicket.capacity} onChange={(e) => setNewTicket({ ...newTicket, capacity: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
+                    <button onClick={addTicket} className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-xl transition border border-blue-500/20 flex items-center justify-center">
+                      <Plus className="w-4 h-4" />
                     </button>
                   </div>
+                  <div className="grid grid-cols-[1fr_100px_80px_40px] gap-2 mb-3 px-0.5">
+                    <p className="text-xs text-gray-600">Name</p>
+                    <p className="text-xs text-gray-600">Price (KES)</p>
+                    <p className="text-xs text-gray-600 flex items-center gap-1"><Hash className="w-2.5 h-2.5" />Capacity</p>
+                    <span />
+                  </div>
+
                   <div className="space-y-2">
                     {tickets.map((ticket, index) => (
-                      <div key={index} className="flex justify-between items-center bg-white/5 px-4 py-3 rounded-lg border border-white/5">
-                        <span className="font-bold text-sm">{ticket.name}</span>
-                        <div className="flex items-center gap-4">
-                          <span className="text-gray-400 text-sm font-mono">KES {parseInt(ticket.price).toLocaleString()}</span>
-                          <button onClick={() => removeTicket(index)} className="text-gray-600 hover:text-red-400 transition">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <div key={index} className="grid grid-cols-[1fr_100px_80px_40px] gap-2 items-center bg-white/5 px-3.5 py-2.5 rounded-xl border border-white/5">
+                        <span className="font-bold text-sm truncate">{ticket.name}</span>
+                        <span className="text-gray-400 text-sm font-mono">KES {parseInt(ticket.price || "0").toLocaleString()}</span>
+                        <span className="text-gray-500 text-sm">{ticket.capacity || "—"}</span>
+                        <button onClick={() => removeTicket(index)} className="text-gray-600 hover:text-red-400 transition flex items-center justify-center">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <button onClick={handlePublish}
+                <button
+                  onClick={handlePublish}
                   disabled={isLoading || tickets.length === 0 || !formData.title || !formData.date || !formData.location}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">
-                  {isLoading ? "Publishing..." : <><Sparkles className="w-5 h-5" /> Launch Event</>}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
+                >
+                  {isLoading
+                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {editingEvent ? "Saving..." : "Publishing..."}</>
+                    : <><Sparkles className="w-5 h-5" /> {editingEvent ? "Save Changes" : "Launch Event"}</>
+                  }
                 </button>
               </div>
             ) : (
               <div className="bg-green-500/10 border border-green-500/20 p-10 rounded-3xl text-center">
-                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30">
+                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-green-500/30">
                   <CheckCircle2 className="w-10 h-10 text-white" />
                 </div>
-                <h2 className="text-3xl font-bold text-white mb-2">Event Live! 🎉</h2>
-                <p className="text-gray-300 mb-8">Your event is now live and accepting ticket purchases.</p>
-                <div className="flex gap-4 justify-center flex-wrap">
-                  <Link href="/events">
-                    <button className="bg-white/10 border border-white/20 text-white font-bold py-3 px-6 rounded-xl hover:bg-white/20 transition">View on Events Page</button>
-                  </Link>
-                  <button onClick={() => { setView("dashboard"); setIsPublished(false); }} className="bg-white text-black font-bold py-3 px-6 rounded-xl hover:bg-gray-200 transition">
+                <h2 className="text-2xl font-bold text-white mb-2">{editingEvent ? "Event Updated! ✅" : "Event Live! 🎉"}</h2>
+                <p className="text-gray-400 mb-8 text-sm">{editingEvent ? "Your changes are now live." : "Your event is now accepting ticket purchases."}</p>
+                <div className="flex gap-3 justify-center flex-wrap">
+                  {publishedId && (
+                    <Link href={`/event/${publishedId}`} target="_blank">
+                      <button className="bg-white/10 border border-white/20 text-white font-bold py-3 px-6 rounded-xl hover:bg-white/20 transition flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4" /> View Event Page
+                      </button>
+                    </Link>
+                  )}
+                  <button onClick={() => { setView("dashboard"); resetCreateForm(); }} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition">
                     Go to Dashboard
                   </button>
                 </div>
@@ -570,25 +807,44 @@ export default function HostPage() {
             )}
           </div>
 
-          {/* Live Preview */}
+          {/* ── Live Preview ── */}
           <div className="hidden lg:flex w-1/2 flex-col items-start sticky top-24 h-fit">
             <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /> Live Preview
             </div>
-            <div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-              <div className="h-56 relative bg-gray-800">
+            <div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="h-52 relative bg-gray-800">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent" />
+                <div className="absolute bottom-3 left-4">
+                  <span className="bg-blue-600/80 text-white text-xs font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">{formData.category}</span>
+                </div>
               </div>
               <div className="p-5">
-                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">{formData.category}</span>
-                <h3 className="text-xl font-bold mt-1 mb-2">{formData.title || "Your Event Title"}</h3>
-                <p className="text-gray-400 text-sm">{formData.date || "Date"} • {formData.location || "Location"}</p>
+                <h3 className="text-lg font-bold leading-tight mb-2">{formData.title || "Your Event Title"}</h3>
+                {formData.description && (
+                  <p className="text-gray-500 text-xs mb-3 line-clamp-2">{formData.description}</p>
+                )}
+                <div className="space-y-1 mb-4">
+                  <p className="text-gray-400 text-xs flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3 text-gray-600" />
+                    {formData.date || "Date"}{formData.time && ` · ${formData.time}`}
+                  </p>
+                  <p className="text-gray-400 text-xs flex items-center gap-1.5">
+                    <MapPin className="w-3 h-3 text-gray-600" />
+                    {formData.location || "Location"}
+                  </p>
+                </div>
                 {tickets.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <p className="text-xs text-gray-500 mb-2">From</p>
-                    <p className="text-2xl font-bold">KES {Math.min(...tickets.map(t => parseInt(t.price) || 0)).toLocaleString()}</p>
+                  <div className="pt-3 border-t border-white/10 flex items-end justify-between">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">From</p>
+                      <p className="text-xl font-bold">KES {Math.min(...tickets.map(t => parseInt(t.price || "0") || 0)).toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">{tickets.length} ticket type{tickets.length !== 1 ? "s" : ""}</p>
+                    </div>
                   </div>
                 )}
               </div>

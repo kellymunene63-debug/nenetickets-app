@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   CheckCircle2, Ticket, ArrowLeft, Shield,
   Loader2, MapPin, Calendar, ChevronRight,
-  AlertCircle, Tag, X, CreditCard, Smartphone, MessageCircle
+  AlertCircle, Tag, X, CreditCard, Smartphone, MessageCircle, Info
 } from "lucide-react";
 
 // ── Paystack inline types ────────────────────────────────────────────────────
@@ -74,6 +74,7 @@ function CheckoutContent() {
   const time     = params.get("time")     ?? "";
   const location = params.get("location") ?? "";
   const image    = params.get("image")    ?? "";
+  const eventId  = params.get("eventId")  ?? "";
 
   const total      = price * quantity;
   const serviceFee = Math.round(total * 0.03);
@@ -106,7 +107,6 @@ function CheckoutContent() {
   const getWhatsAppUrl = (id: string) => {
     const msg = encodeURIComponent(buildWhatsAppMessage(id));
     if (phone.trim()) {
-      // Normalise Kenyan numbers: 07xx → 2547xx, +254 → 254
       const digits = phone.replace(/\D/g, "");
       const normalised = digits.startsWith("0") ? `254${digits.slice(1)}` : digits.startsWith("254") ? digits : `254${digits}`;
       return `https://wa.me/${normalised}?text=${msg}`;
@@ -149,7 +149,6 @@ function CheckoutContent() {
     setStep("paying");
 
     try {
-      // Verify with our backend
       const res  = await fetch(`/api/paystack/verify/${reference}`);
       const data = await res.json() as { paid: boolean };
 
@@ -159,7 +158,6 @@ function CheckoutContent() {
         return;
       }
 
-      // Save ticket to localStorage
       const ticket = {
         id: ticketId,
         title, type, price: grandTotal, quantity,
@@ -174,7 +172,6 @@ function CheckoutContent() {
       setConfirmedRef(reference);
       setStep("confirmed");
 
-      // Send confirmation email (fire-and-forget — never blocks checkout)
       fetch("/api/email/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -194,7 +191,6 @@ function CheckoutContent() {
     }
   }, [ticketId, title, type, grandTotal, quantity, date, time, location, image, email]);
 
-  // For free tickets — skip Paystack, generate ticket directly
   const claimFreeTicket = useCallback(() => {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setEmailError("Enter a valid email address");
@@ -219,7 +215,6 @@ function CheckoutContent() {
     setConfirmedRef(freeRef);
     setStep("confirmed");
 
-    // Send confirmation email
     fetch("/api/email/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -252,15 +247,13 @@ function CheckoutContent() {
     const handler = window.PaystackPop.setup({
       key: publicKey,
       email,
-      amount: grandTotal * 100, // kobo
+      amount: grandTotal * 100,
       currency: "KES",
       ref: `NENE-${ticketId}-${Date.now()}`,
       metadata: {
-        title, type, quantity, date, location, promoCode,
+        title, type, quantity, date, location, promoCode, eventId,
       },
-      onClose: () => {
-        // user closed the popup without paying — do nothing
-      },
+      onClose: () => {},
       callback: (response) => {
         handlePaymentSuccess(response.reference);
       },
@@ -322,7 +315,6 @@ function CheckoutContent() {
                 <p className="text-xs text-gray-600 mt-1 font-mono">Paystack ref: {confirmedRef}</p>
               )}
 
-              {/* Email sent indicator */}
               <div className="mt-4">
                 {emailSent === null && (
                   <p className="text-xs text-gray-600 flex items-center justify-center gap-1.5">
@@ -344,8 +336,7 @@ function CheckoutContent() {
           </div>
 
           <div className="flex flex-col gap-3">
-            {/* WhatsApp CTA — primary action */}
-            <a
+            
               href={getWhatsAppUrl(ticketId)}
               target="_blank"
               rel="noopener noreferrer"
@@ -425,7 +416,15 @@ function CheckoutContent() {
               <span className="font-bold">KES {total.toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-gray-500">
-              <span>Service fee (3%)</span>
+              <span className="flex items-center gap-1.5">
+                Service fee (3%)
+                <span
+                  title="Covers payment processing and platform operating costs. This fee is non-refundable."
+                  className="cursor-help text-gray-600 hover:text-gray-400 transition"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                </span>
+              </span>
               <span>KES {serviceFee.toLocaleString()}</span>
             </div>
             {promoDiscount > 0 && (
@@ -471,6 +470,19 @@ function CheckoutContent() {
                   <AlertCircle className="w-3 h-3" /> {promoError}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Refund policy */}
+          {grandTotal > 0 && (
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4">
+              <p className="text-xs font-bold text-amber-400 mb-1.5 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" /> Refund Policy
+              </p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Tickets are <strong className="text-gray-400">non-refundable</strong> once purchased, except if the event is officially cancelled by the organiser — in which case you are entitled to a full ticket refund within 7–14 business days. The 3% service fee is non-refundable in all cases. Questions?{" "}
+                <a href="mailto:support@nenetickets.co.ke" className="text-blue-400 hover:underline">support@nenetickets.co.ke</a>
+              </p>
             </div>
           )}
 

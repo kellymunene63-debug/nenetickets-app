@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 const KEY = "nene:events";
 
-// ── Upstash Redis helpers (plain fetch — no package needed) ──────────────────
 async function redisGet<T>(key: string): Promise<T | null> {
   const url   = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -23,7 +23,6 @@ async function redisSet(key: string, value: unknown): Promise<void> {
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return;
 
-  // Send ["SET", key, serialised-value] as a pipeline command
   await fetch(`${url}/pipeline`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -31,7 +30,6 @@ async function redisSet(key: string, value: unknown): Promise<void> {
   });
 }
 
-// ── Route handlers ────────────────────────────────────────────────────────────
 export async function GET() {
   try {
     const events = await redisGet<object[]>(KEY) ?? [];
@@ -46,7 +44,7 @@ export async function POST(req: Request) {
   try {
     const event  = await req.json();
     const events = await redisGet<object[]>(KEY) ?? [];
-    events.unshift(event); // newest first
+    events.unshift(event);
     await redisSet(KEY, events);
     return NextResponse.json({ success: true, event });
   } catch (err) {

@@ -62,7 +62,16 @@ function TicketCard({ ticket }: { ticket: PurchasedTicket }) {
   const [expanded, setExpanded] = useState(false);
 
   const handleShare = () => {
-    const text = `I'm going to ${ticket.title} on ${ticket.date}! 🎟️`;
+    const text =
+      `🎟 *NeneTickets — My Ticket*\n\n` +
+      `*${ticket.title}*\n` +
+      `📅 ${ticket.date} at ${ticket.time}\n` +
+      `📍 ${ticket.location}\n\n` +
+      `Ticket Type: ${ticket.type}\n` +
+      `Quantity: ${ticket.quantity}\n` +
+      `Ticket ID: *${ticket.id}*\n\n` +
+      `Show this ID or QR code at the gate.\n` +
+      `🔗 https://nenetickets.co.ke/tickets`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 

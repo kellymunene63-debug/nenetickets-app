@@ -6,8 +6,8 @@ const PRECACHE_URLS = [
   "/events",
   "/tickets",
   "/manifest.json",
-  "/icons/icon-192x192.png",
-  "/icons/icon-512x512.png",
+  "/icon-192x192.png",
+  "/icon-512x512.png",
 ];
 
 // ── Install: pre-cache shell assets ──────────────────────────────────────────
@@ -48,7 +48,6 @@ self.addEventListener("fetch", (event) => {
 
   // Static assets (images, fonts, icons): cache-first
   if (
-    url.pathname.startsWith("/icons/") ||
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.endsWith(".png") ||
     url.pathname.endsWith(".jpg") ||

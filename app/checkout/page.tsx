@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   CheckCircle2, Ticket, ArrowLeft, Shield,
   Loader2, MapPin, Calendar, ChevronRight,
-  AlertCircle, Tag, X, CreditCard, Smartphone
+  AlertCircle, Tag, X, CreditCard, Smartphone, MessageCircle
 } from "lucide-react";
 
 // ── Paystack inline types ────────────────────────────────────────────────────
@@ -69,11 +69,27 @@ function CheckoutContent() {
   const [step, setStep]           = useState<CheckoutStep>("summary");
   const [email, setEmail]         = useState("");
   const [emailError, setEmailError] = useState("");
+  const [phone, setPhone]         = useState("");
   const [payError, setPayError]   = useState("");
   const [ticketId]                = useState(() => generateTicketId());
   const [paystackLoaded, setPaystackLoaded] = useState(false);
   const [confirmedRef, setConfirmedRef] = useState("");
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
+
+  // Build WhatsApp message and URL
+  const buildWhatsAppMessage = (id: string) =>
+    `🎟 *NeneTickets — Ticket Confirmed!*\n\n*${title}*\n📅 ${date} at ${time}\n📍 ${location}\n\nTicket Type: ${type}\nQuantity: ${quantity}\nTicket ID: *${id}*\n\n${grandTotal === 0 ? "✅ Free Event" : `Amount Paid: KES ${grandTotal.toLocaleString()}`}\n\nShow this message or your QR code at the gate.\n🔗 View ticket: ${process.env.NEXT_PUBLIC_BASE_URL ?? "https://nenetickets.co.ke"}/tickets`;
+
+  const getWhatsAppUrl = (id: string) => {
+    const msg = encodeURIComponent(buildWhatsAppMessage(id));
+    if (phone.trim()) {
+      // Normalise Kenyan numbers: 07xx → 2547xx, +254 → 254
+      const digits = phone.replace(/\D/g, "");
+      const normalised = digits.startsWith("0") ? `254${digits.slice(1)}` : digits.startsWith("254") ? digits : `254${digits}`;
+      return `https://wa.me/${normalised}?text=${msg}`;
+    }
+    return `https://wa.me/?text=${msg}`;
+  };
 
   // Load Paystack inline script
   useEffect(() => {
@@ -302,6 +318,17 @@ function CheckoutContent() {
           </div>
 
           <div className="flex flex-col gap-3">
+            {/* WhatsApp CTA — primary action */}
+            <a
+              href={getWhatsAppUrl(ticketId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
+            >
+              <MessageCircle className="w-4 h-4" />
+              {phone.trim() ? "Send Ticket to My WhatsApp" : "Share Ticket on WhatsApp"}
+            </a>
+
             <Link href="/tickets">
               <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2">
                 <Ticket className="w-4 h-4" /> View My Tickets
@@ -441,6 +468,28 @@ function CheckoutContent() {
               </p>
             )}
             <p className="text-xs text-gray-600 mt-2">Your ticket confirmation will be sent here.</p>
+          </div>
+
+          {/* WhatsApp number (optional) */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+            <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-green-400" />
+              WhatsApp number
+              <span className="text-gray-600 font-normal text-xs">(optional)</span>
+            </label>
+            <div className="flex gap-2">
+              <div className="bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm text-gray-400 font-bold flex-shrink-0">
+                🇰🇪 +254
+              </div>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="7XX XXX XXX"
+                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 focus:outline-none focus:border-green-500 transition"
+              />
+            </div>
+            <p className="text-xs text-gray-600 mt-2">We&apos;ll send your ticket directly to your WhatsApp.</p>
           </div>
 
           {/* Pay / Claim button */}

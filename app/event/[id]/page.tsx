@@ -9,10 +9,14 @@ import {
   Copy, Twitter, MessageCircle, Info, Eye, Clock, Tag, Sparkles, ArrowRight
 } from "lucide-react";
 
-const EVENTS_DB: Record<string, {
+// ── Hardcoded events ─────────────────────────────────────────────────────────
+interface EventData {
   title: string; image: string; date: string; time: string; location: string;
-  basePrice: number; baseVipPrice: number; description: string; category: string; tag: string;
-}> = {
+  basePrice: number; baseVipPrice: number; description: string; category: string;
+  tag: string; ticketTypes?: { name: string; price: number }[];
+}
+
+const EVENTS_DB: Record<string, EventData> = {
   "1": {
     title: "Safaricom Jazz Festival 2026",
     image: "https://images.unsplash.com/photo-1511192336575-5a79af67a629?q=80&w=2070",
@@ -111,6 +115,34 @@ const EVENTS_DB: Record<string, {
   },
 };
 
+// ── Normalise a localStorage event into EventData ─────────────────────────────
+function normaliseLocalEvent(raw: {
+  id: string; title: string; description?: string; date: string; time?: string;
+  location: string; image: string; category: string; aiTag?: string;
+  tickets?: { name: string; price: string; capacity?: string }[];
+}): EventData {
+  const tickets = (raw.tickets ?? []).map((t) => ({
+    name: t.name,
+    price: parseInt(t.price) || 0,
+  }));
+  const prices = tickets.map((t) => t.price);
+  const basePrice = prices[0] ?? 0;
+  const baseVipPrice = prices[1] ?? prices[0] ?? 0;
+  return {
+    title: raw.title,
+    image: raw.image,
+    date: raw.date,
+    time: raw.time ?? "",
+    location: raw.location,
+    basePrice,
+    baseVipPrice,
+    description: raw.description ?? "",
+    category: raw.category,
+    tag: raw.aiTag ?? "NEW",
+    ticketTypes: tickets.length > 0 ? tickets : undefined,
+  };
+}
+
 function getDaysUntil(dateStr: string): number | null {
   try {
     const d = new Date(dateStr);
@@ -120,7 +152,37 @@ function getDaysUntil(dateStr: string): number | null {
 }
 
 export default function EventPage({ params }: { params: { id: string } }) {
-  const event = EVENTS_DB[params.id];
+  const staticEvent = EVENTS_DB[params.id] ?? null;
+
+  // For hosted (localStorage) events
+  const [localEvent, setLocalEvent] = useState<EventData | null>(null);
+  const [loadingLocal, setLoadingLocal] = useState(!staticEvent);
+
+  // Recommendations — includes localStorage events
+  const [allLocalEvents, setAllLocalEvents] = useState<{ id: string; data: EventData }[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored: {
+        id: string; title: string; description?: string; date: string; time?: string;
+        location: string; image: string; category: string; aiTag?: string;
+        tickets?: { name: string; price: string; capacity?: string }[];
+      }[] = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
+
+      // Build local events list for recommendations
+      const localList = stored.map((ev) => ({ id: ev.id, data: normaliseLocalEvent(ev) }));
+      setAllLocalEvents(localList);
+
+      if (!staticEvent) {
+        const found = stored.find((ev) => ev.id === params.id);
+        if (found) setLocalEvent(normaliseLocalEvent(found));
+      }
+    } catch { /* silent */ }
+    setLoadingLocal(false);
+  }, [params.id, staticEvent]);
+
+  const event: EventData | null = staticEvent ?? localEvent;
+
   const [selectedTicket, setSelectedTicket] = useState<"regular" | "vip">("regular");
   const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
@@ -128,21 +190,25 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
   const daysUntil = event ? getDaysUntil(event.date) : null;
 
-  // Recommendations: same category first, then others — exclude current event, max 3
+  // Recommendations: same category first, then others — exclude current, max 3
   const recommendations = useMemo(() => {
     if (!event) return [];
-    const all = Object.entries(EVENTS_DB)
+    // Combine EVENTS_DB + localStorage events
+    const dbEntries = Object.entries(EVENTS_DB)
       .filter(([id]) => id !== params.id)
       .map(([id, e]) => ({ id, ...e }));
+    const localEntries = allLocalEvents
+      .filter((e) => e.id !== params.id)
+      .map((e) => ({ id: e.id, ...e.data }));
+    const all = [...dbEntries, ...localEntries];
     const sameCategory = all.filter((e) => e.category === event.category);
     const others = all.filter((e) => e.category !== event.category);
     return [...sameCategory, ...others].slice(0, 3);
-  }, [params.id, event]);
+  }, [params.id, event, allLocalEvents]);
 
-  // Register this visit and then poll every 30s
+  // Register viewer + poll
   useEffect(() => {
     if (!event) return;
-
     const register = async () => {
       try {
         const res = await fetch(`/api/viewers/${params.id}`, { method: "POST" });
@@ -150,7 +216,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
         setViewers(data.count);
       } catch { /* silent */ }
     };
-
     const poll = async () => {
       try {
         const res = await fetch(`/api/viewers/${params.id}`);
@@ -158,21 +223,44 @@ export default function EventPage({ params }: { params: { id: string } }) {
         setViewers(data.count);
       } catch { /* silent */ }
     };
-
     register();
     const interval = setInterval(poll, 30_000);
     return () => clearInterval(interval);
   }, [params.id, event]);
 
+  // ── Loading state ─────────────────────────────────────────────────────────
+  if (loadingLocal) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center">
+        <Navbar />
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mt-20" />
+      </main>
+    );
+  }
+
+  // ── Not found ─────────────────────────────────────────────────────────────
   if (!event) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center flex-col gap-4 pt-20">
         <Navbar />
-        <h2 className="text-2xl font-bold">Event not found</h2>
-        <Link href="/events" className="text-blue-400 hover:underline">Browse all events</Link>
+        <div className="text-center">
+          <div className="text-5xl mb-4">🎟</div>
+          <h2 className="text-2xl font-bold mb-2">Event not found</h2>
+          <p className="text-gray-500 text-sm mb-6">This event may have been removed or doesn&apos;t exist.</p>
+          <Link href="/events" className="text-blue-400 hover:underline font-bold">Browse all events</Link>
+        </div>
       </main>
     );
   }
+
+  // ── Ticket types ──────────────────────────────────────────────────────────
+  // For hosted events with custom ticket types, use them; else use Regular/VIP
+  const hasCustomTickets = (event.ticketTypes?.length ?? 0) > 0;
+  const regularLabel = hasCustomTickets ? (event.ticketTypes![0].name) : "Regular Admission";
+  const vipLabel = hasCustomTickets && event.ticketTypes!.length > 1
+    ? event.ticketTypes![1].name
+    : "VIP Experience";
+  const hasVip = !hasCustomTickets || (event.ticketTypes?.length ?? 0) > 1;
 
   const regularPrice = event.basePrice;
   const vipPrice = event.baseVipPrice;
@@ -192,7 +280,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
     else { navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }
   };
 
-  const checkoutUrl = `/checkout?title=${encodeURIComponent(event.title)}&type=${selectedTicket}&price=${currentPrice}&quantity=${quantity}&date=${encodeURIComponent(event.date)}&time=${encodeURIComponent(event.time)}&location=${encodeURIComponent(event.location)}&image=${encodeURIComponent(event.image)}`;
+  const selectedTicketName = selectedTicket === "regular" ? regularLabel : vipLabel;
+  const checkoutUrl = `/checkout?title=${encodeURIComponent(event.title)}&type=${encodeURIComponent(selectedTicketName)}&price=${currentPrice}&quantity=${quantity}&date=${encodeURIComponent(event.date)}&time=${encodeURIComponent(event.time)}&location=${encodeURIComponent(event.location)}&image=${encodeURIComponent(event.image)}`;
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -222,7 +311,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
           <span className="text-blue-400 text-sm font-bold uppercase tracking-widest block mb-2">{event.category}</span>
           <h1 className="text-3xl md:text-5xl font-bold mb-4 max-w-2xl leading-tight">{event.title}</h1>
           <div className="flex flex-col md:flex-row gap-3 md:gap-8 text-gray-300 font-medium text-sm">
-            <span className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" /> {event.date} at {event.time}</span>
+            <span className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" /> {event.date}{event.time && ` at ${event.time}`}</span>
             <span className="flex items-center gap-2"><MapPin className="w-4 h-4 text-pink-400" /> {event.location}</span>
           </div>
         </div>
@@ -230,12 +319,14 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
       <div className="container mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-5 gap-10">
 
-        {/* LEFT: Content — 3 of 5 columns */}
+        {/* LEFT: Content */}
         <div className="lg:col-span-3 space-y-8">
 
           <section>
             <h2 className="text-2xl font-bold mb-4">About the Event</h2>
-            <p className="text-gray-400 text-lg leading-relaxed">{event.description}</p>
+            <p className="text-gray-400 text-lg leading-relaxed">
+              {event.description || "More details coming soon."}
+            </p>
           </section>
 
           {/* Live viewers */}
@@ -253,27 +344,29 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 <MapPin className="w-5 h-5 text-blue-500" /> Venue Map
               </h3>
               <div className="text-xs text-gray-500 flex gap-4 font-bold uppercase">
-                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-pink-500 rounded-full" /> VIP</span>
-                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-blue-500 rounded-full" /> Regular</span>
+                {hasVip && <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-pink-500 rounded-full" /> {vipLabel}</span>}
+                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-blue-500 rounded-full" /> {regularLabel}</span>
               </div>
             </div>
             <div className="relative w-full max-w-lg mx-auto">
               <div className="w-3/4 mx-auto h-14 bg-gray-800 rounded-t-3xl border-t-4 border-purple-500 flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
                 <span className="text-xs font-bold uppercase tracking-[0.3em] text-purple-400">Main Stage</span>
               </div>
-              <div
-                onClick={() => setSelectedTicket("vip")}
-                className={`w-2/3 mx-auto h-20 mb-4 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-105 border-2 ${
-                  selectedTicket === "vip"
-                    ? "bg-pink-500/20 border-pink-500 shadow-[0_0_25px_rgba(236,72,153,0.4)]"
-                    : "bg-white/5 border-white/10 hover:border-pink-500/50"
-                }`}
-              >
-                <div className="text-center">
-                  <span className={`block font-bold ${selectedTicket === "vip" ? "text-pink-400" : "text-gray-400"}`}>Golden Circle (VIP)</span>
-                  <span className="text-xs text-gray-500">Front Row Experience</span>
+              {hasVip && (
+                <div
+                  onClick={() => setSelectedTicket("vip")}
+                  className={`w-2/3 mx-auto h-20 mb-4 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-105 border-2 ${
+                    selectedTicket === "vip"
+                      ? "bg-pink-500/20 border-pink-500 shadow-[0_0_25px_rgba(236,72,153,0.4)]"
+                      : "bg-white/5 border-white/10 hover:border-pink-500/50"
+                  }`}
+                >
+                  <div className="text-center">
+                    <span className={`block font-bold ${selectedTicket === "vip" ? "text-pink-400" : "text-gray-400"}`}>{vipLabel}</span>
+                    <span className="text-xs text-gray-500">Front Row Experience</span>
+                  </div>
                 </div>
-              </div>
+              )}
               <div
                 onClick={() => setSelectedTicket("regular")}
                 className={`w-full h-28 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-105 border-2 ${
@@ -283,7 +376,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 }`}
               >
                 <div className="text-center">
-                  <span className={`block font-bold ${selectedTicket === "regular" ? "text-blue-400" : "text-gray-400"}`}>General Admission</span>
+                  <span className={`block font-bold ${selectedTicket === "regular" ? "text-blue-400" : "text-gray-400"}`}>{regularLabel}</span>
                   <span className="text-xs text-gray-500">Standing / Seating Area</span>
                 </div>
               </div>
@@ -296,10 +389,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
           <ReviewSection />
         </div>
 
-        {/* RIGHT: Sticky sidebar — 2 of 5 columns */}
+        {/* RIGHT: Sticky sidebar */}
         <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-24 h-fit">
 
-          {/* Ticket selector */}
           <div className="bg-white/5 border border-white/10 p-6 rounded-2xl shadow-xl">
             <h3 className="text-lg font-bold mb-4">Select Ticket</h3>
 
@@ -314,45 +406,47 @@ export default function EventPage({ params }: { params: { id: string } }) {
             >
               <div className="flex justify-between items-center gap-3">
                 <div className="min-w-0">
-                  <span className="font-bold block">Regular Admission</span>
+                  <span className="font-bold block">{regularLabel}</span>
                   <span className="text-xs text-gray-500">General access</span>
                 </div>
                 <div className="flex-shrink-0 flex items-center gap-2">
                   <span className={`font-bold text-lg ${selectedTicket === "regular" ? "text-blue-400" : "text-white"}`}>
-                    {event.basePrice === 0 ? "Free" : `KES ${regularPrice.toLocaleString()}`}
+                    {regularPrice === 0 ? "Free" : `KES ${regularPrice.toLocaleString()}`}
                   </span>
                   {selectedTicket === "regular" && <CheckCircle2 className="text-blue-500 w-5 h-5 flex-shrink-0" />}
                 </div>
               </div>
             </div>
 
-            {/* VIP */}
-            <div
-              onClick={() => setSelectedTicket("vip")}
-              className={`mb-5 p-4 rounded-xl border cursor-pointer transition-all relative ${
-                selectedTicket === "vip"
-                  ? "border-pink-500 bg-pink-500/10"
-                  : "border-white/10 hover:border-white/30 hover:bg-white/5"
-              }`}
-            >
-              <div className="flex justify-between items-center gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-bold">VIP Experience</span>
-                    <span className="bg-gradient-to-r from-pink-600 to-purple-600 text-[9px] uppercase tracking-wider px-2 py-0.5 rounded text-white font-bold flex-shrink-0">
-                      {event.tag}
-                    </span>
+            {/* VIP — only shown if there's a second ticket type */}
+            {hasVip && (
+              <div
+                onClick={() => setSelectedTicket("vip")}
+                className={`mb-5 p-4 rounded-xl border cursor-pointer transition-all relative ${
+                  selectedTicket === "vip"
+                    ? "border-pink-500 bg-pink-500/10"
+                    : "border-white/10 hover:border-white/30 hover:bg-white/5"
+                }`}
+              >
+                <div className="flex justify-between items-center gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-bold">{vipLabel}</span>
+                      <span className="bg-gradient-to-r from-pink-600 to-purple-600 text-[9px] uppercase tracking-wider px-2 py-0.5 rounded text-white font-bold flex-shrink-0">
+                        {event.tag}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500">Premium access + perks</span>
                   </div>
-                  <span className="text-xs text-gray-500">Front row + perks</span>
-                </div>
-                <div className="flex-shrink-0 flex items-center gap-2">
-                  <span className={`font-bold text-lg ${selectedTicket === "vip" ? "text-pink-400" : "text-white"}`}>
-                    KES {vipPrice.toLocaleString()}
-                  </span>
-                  {selectedTicket === "vip" && <CheckCircle2 className="text-pink-500 w-5 h-5 flex-shrink-0" />}
+                  <div className="flex-shrink-0 flex items-center gap-2">
+                    <span className={`font-bold text-lg ${selectedTicket === "vip" ? "text-pink-400" : "text-white"}`}>
+                      {vipPrice === 0 ? "Free" : `KES ${vipPrice.toLocaleString()}`}
+                    </span>
+                    {selectedTicket === "vip" && <CheckCircle2 className="text-pink-500 w-5 h-5 flex-shrink-0" />}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Quantity */}
             <div className="flex items-center justify-between mb-5 bg-black/40 p-4 rounded-xl border border-white/10">
@@ -361,19 +455,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 <span className="text-xs text-gray-600">Max 10 per order</span>
               </div>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleQuantity("dec")}
-                  disabled={quantity === 1}
-                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-30"
-                >
+                <button onClick={() => handleQuantity("dec")} disabled={quantity === 1}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-30">
                   <Minus className="w-4 h-4" />
                 </button>
                 <span className="font-bold text-2xl w-8 text-center">{quantity}</span>
-                <button
-                  onClick={() => handleQuantity("inc")}
-                  disabled={quantity === 10}
-                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-30"
-                >
+                <button onClick={() => handleQuantity("inc")} disabled={quantity === 10}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95 disabled:opacity-30">
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
@@ -381,7 +469,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
             {/* Total */}
             <div className="flex justify-between items-center mb-4 text-sm">
-              <span className="text-gray-400">{quantity} × {selectedTicket} ticket{quantity > 1 ? "s" : ""}</span>
+              <span className="text-gray-400">{quantity} × {selectedTicketName}</span>
               <span className="font-bold text-lg">
                 {currentPrice === 0 ? "Free" : `KES ${totalPrice.toLocaleString()}`}
               </span>
@@ -389,16 +477,15 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
             <Link href={checkoutUrl}>
               <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 active:scale-95">
-                {currentPrice === 0 ? (
-                  <><Tag className="w-5 h-5" /> Reserve Free Ticket</>
-                ) : (
-                  <>Pay KES {totalPrice.toLocaleString()} →</>
-                )}
+                {currentPrice === 0
+                  ? <><Tag className="w-5 h-5" /> Reserve Free Ticket</>
+                  : <>Pay KES {totalPrice.toLocaleString()} →</>
+                }
               </button>
             </Link>
 
             <p className="text-center text-xs text-gray-600 mt-3 flex items-center justify-center gap-1">
-              <span>🔒</span> Secured by Paystack
+              <span>🔒</span> Secured by Paystack · M-Pesa accepted
             </p>
           </div>
 
@@ -447,22 +534,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 return (
                   <Link key={rec.id} href={`/event/${rec.id}`}>
                     <div className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 cursor-pointer">
-                      {/* Image */}
                       <div className="relative h-44 overflow-hidden">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={rec.image}
-                          alt={rec.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
+                        <img src={rec.image} alt={rec.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-
-                        {/* Category badge */}
                         <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm text-blue-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-blue-500/20">
                           {rec.category}
                         </span>
-
-                        {/* Urgency badge */}
                         {daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && (
                           <span className="absolute top-3 right-3 bg-orange-500/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
                             <Clock className="w-2.5 h-2.5" />
@@ -470,26 +548,16 @@ export default function EventPage({ params }: { params: { id: string } }) {
                           </span>
                         )}
                       </div>
-
-                      {/* Details */}
                       <div className="p-4">
-                        <h3 className="font-bold text-white text-sm leading-snug mb-2 line-clamp-2 group-hover:text-blue-400 transition-colors">
-                          {rec.title}
-                        </h3>
+                        <h3 className="font-bold text-white text-sm leading-snug mb-2 line-clamp-2 group-hover:text-blue-400 transition-colors">{rec.title}</h3>
                         <div className="space-y-1 mb-3">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <Calendar className="w-3 h-3 text-gray-600" /> {rec.date}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <MapPin className="w-3 h-3 text-gray-600" /> {rec.location}
-                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-400"><Calendar className="w-3 h-3 text-gray-600" /> {rec.date}</div>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-400"><MapPin className="w-3 h-3 text-gray-600" /> {rec.location}</div>
                         </div>
                         <div className="flex items-center justify-between pt-3 border-t border-white/5">
                           <div>
                             <span className="text-gray-500 text-[10px] block">From</span>
-                            <span className={`font-bold text-sm ${rec.basePrice === 0 ? "text-green-400" : "text-white"}`}>
-                              {recPrice}
-                            </span>
+                            <span className={`font-bold text-sm ${rec.basePrice === 0 ? "text-green-400" : "text-white"}`}>{recPrice}</span>
                           </div>
                           <span className="text-xs font-bold text-blue-400 group-hover:text-blue-300 flex items-center gap-1 transition-colors">
                             Get Tickets <ArrowRight className="w-3 h-3" />

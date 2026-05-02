@@ -21,39 +21,11 @@ interface PurchasedTicket {
 }
 
 function QRCode({ value }: { value: string }) {
-  // Deterministic grid based on string hash
-  const size = 11;
-  const cells: boolean[] = [];
-  for (let i = 0; i < size * size; i++) {
-    const charCode = value.charCodeAt(i % value.length) + i;
-    cells.push(charCode % 3 !== 0);
-  }
-  // Fixed corner markers
-  const corners = [0, 1, 2, 3, 4, 5, 6, 11, 22, 33, 44, 55, 66, 4, 15, 26, 37, 48, 59, 70,
-    77, 76, 75, 74, 73, 72, 71, 7, 18, 29, 40, 51, 62];
-
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(value)}&color=111111&bgcolor=ffffff&margin=10`;
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${size}, 1fr)`,
-        gap: 1,
-        width: 110,
-        height: 110,
-        padding: 8,
-        backgroundColor: "white",
-        borderRadius: 8,
-      }}
-    >
-      {cells.map((filled, i) => (
-        <div
-          key={i}
-          style={{
-            backgroundColor: filled || corners.includes(i) ? "#111" : "white",
-            borderRadius: 1,
-          }}
-        />
-      ))}
+    <div style={{ background: "white", borderRadius: 8, padding: 6, display: "inline-block" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={qrUrl} alt={`QR code for ticket ${value}`} width={110} height={110} style={{ display: "block", borderRadius: 4 }} />
     </div>
   );
 }

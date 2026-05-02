@@ -15,6 +15,21 @@ export const metadata: Metadata = {
     template: "%s | NeneTickets",
   },
   description: "Experience the extraordinary. Book tickets for concerts, sports, and tech events in Kenya.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "NeneTickets",
+  },
+  icons: {
+    icon: "/icons/icon-192x192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "msapplication-TileColor": "#2563eb",
+    "theme-color": "#050511",
+  },
 };
 
 export default function RootLayout({
@@ -26,6 +41,7 @@ export default function RootLayout({
     <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
       <html lang="en">
         <body className={inter.className}>
+          <PWARegister />
           {children}
           <Footer />
           <NeneBot />

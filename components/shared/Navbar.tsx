@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, Ticket, ChevronRight } from "lucide-react";
+import { Menu, X, ChevronRight } from "lucide-react";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
@@ -27,13 +27,13 @@ export default function Navbar() {
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
 
         {/* Logo */}
-        <Link href="/" onClick={close} className="flex items-center gap-2">
-          <div className="bg-blue-600 p-2 rounded-xl">
-            <Ticket className="w-5 h-5 text-white transform -rotate-45" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white">
-            Nene<span className="text-blue-500">Tickets</span>
-          </span>
+        <Link href="/" onClick={close} className="flex items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="NeneTickets"
+            className="h-10 w-auto object-contain"
+          />
         </Link>
 
         {/* Desktop Links */}

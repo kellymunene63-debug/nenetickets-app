@@ -1182,7 +1182,7 @@ export default function HostPage() {
                     <Upload className="w-3 h-3" /> Cover Image
                   </label>
                   <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-3">
                     <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-white/15 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition text-center group">
                       <div className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-600/20 transition">
                         <Upload className="w-4 h-4 text-blue-400" />
@@ -1191,17 +1191,18 @@ export default function HostPage() {
                       <span className="text-xs text-gray-600 mt-0.5">JPG, PNG, WebP</span>
                     </div>
                     <div className="relative">
+                      <p className="text-xs text-gray-600 mb-1.5">Or pick a stock image</p>
                       <select
                         name="image"
                         value={formData.image}
                         onChange={handleChange}
-                        className="w-full h-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer text-sm"
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition appearance-none cursor-pointer text-sm"
                       >
                         {STOCK_IMAGES.map((img) => (
                           <option key={img.value} value={img.value}>{img.label}</option>
                         ))}
                       </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                      <ChevronDown className="absolute right-3 bottom-3 w-4 h-4 text-gray-500 pointer-events-none" />
                     </div>
                   </div>
                 </div>
@@ -1261,28 +1262,31 @@ export default function HostPage() {
                   </label>
 
                   {/* Add ticket row */}
-                  <div className="grid grid-cols-[1fr_100px_80px_40px] gap-2 mb-4">
-                    <input placeholder="Type name (e.g. VIP)" value={newTicket.name} onChange={(e) => setNewTicket({ ...newTicket, name: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
-                    <input type="number" placeholder="KES" value={newTicket.price} onChange={(e) => setNewTicket({ ...newTicket, price: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
-                    <input type="number" placeholder="Qty" value={newTicket.capacity} onChange={(e) => setNewTicket({ ...newTicket, capacity: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
+                  <div className="grid grid-cols-[1fr_1fr_40px] gap-2 mb-2">
+                    <input
+                      placeholder="Type name (e.g. VIP)"
+                      value={newTicket.name}
+                      onChange={(e) => setNewTicket({ ...newTicket, name: e.target.value })}
+                      className="col-span-3 bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700"
+                    />
+                    <input type="number" placeholder="Price (KES)" value={newTicket.price} onChange={(e) => setNewTicket({ ...newTicket, price: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
+                    <input type="number" placeholder="Capacity" value={newTicket.capacity} onChange={(e) => setNewTicket({ ...newTicket, capacity: e.target.value })} className="bg-black/50 border border-white/10 rounded-xl p-2.5 text-white text-sm outline-none focus:border-blue-500 placeholder:text-gray-700" />
                     <button onClick={addTicket} className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-xl transition border border-blue-500/20 flex items-center justify-center">
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-[1fr_100px_80px_40px] gap-2 mb-3 px-0.5">
-                    <p className="text-xs text-gray-600">Name</p>
-                    <p className="text-xs text-gray-600">Price (KES)</p>
-                    <p className="text-xs text-gray-600 flex items-center gap-1"><Hash className="w-2.5 h-2.5" />Capacity</p>
-                    <span />
-                  </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-4">
                     {tickets.map((ticket, index) => (
-                      <div key={index} className="grid grid-cols-[1fr_100px_80px_40px] gap-2 items-center bg-white/5 px-3.5 py-2.5 rounded-xl border border-white/5">
-                        <span className="font-bold text-sm truncate">{ticket.name}</span>
-                        <span className="text-gray-400 text-sm font-mono">KES {parseInt(ticket.price || "0").toLocaleString()}</span>
-                        <span className="text-gray-500 text-sm">{ticket.capacity || "—"}</span>
-                        <button onClick={() => removeTicket(index)} className="text-gray-600 hover:text-red-400 transition flex items-center justify-center">
+                      <div key={index} className="flex items-center justify-between bg-white/5 px-3.5 py-3 rounded-xl border border-white/5 gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm truncate">{ticket.name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            KES {parseInt(ticket.price || "0").toLocaleString()}
+                            {ticket.capacity && <span className="ml-2 text-gray-600">· {ticket.capacity} seats</span>}
+                          </p>
+                        </div>
+                        <button onClick={() => removeTicket(index)} className="text-gray-600 hover:text-red-400 transition flex-shrink-0 p-1">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

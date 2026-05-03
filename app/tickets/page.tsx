@@ -52,6 +52,7 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
   return (
     <div className={`bg-white/5 border rounded-2xl overflow-hidden transition-all ${isCancelled ? "border-red-500/20" : isPast ? "border-white/5 opacity-60" : "border-white/10 hover:border-white/20"}`}>
       <div className="flex items-stretch">
+        {/* Event image strip */}
         {ticket.image && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -61,6 +62,7 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
           />
         )}
 
+        {/* Main content */}
         <div className="flex-1 p-4 md:p-5">
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -89,6 +91,7 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
           </div>
         </div>
 
+        {/* Right: price + expand toggle */}
         <div className="flex flex-col items-end justify-between p-4 flex-shrink-0">
           <span className="text-sm font-bold text-white">KES {ticket.price.toLocaleString()}</span>
           <button
@@ -160,16 +163,42 @@ export default function MyTicketsPage() {
   const [cancelledTitles, setCancelledTitles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
-      stored.sort((a: PurchasedTicket, b: PurchasedTicket) =>
-        new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
-      );
-      setTickets(stored);
-    } catch {
-      setTickets([]);
-    }
+    // Fetch from Redis (primary source)
+    fetch("/api/tickets")
+      .then((r) => r.ok ? r.json() : null)
+      .then((redisTickets: PurchasedTicket[] | null) => {
+        if (redisTickets && redisTickets.length > 0) {
+          redisTickets.sort((a, b) =>
+            new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
+          );
+          setTickets(redisTickets);
+        } else {
+          // Fall back to localStorage for tickets bought before Redis migration
+          try {
+            const stored = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
+            stored.sort((a: PurchasedTicket, b: PurchasedTicket) =>
+              new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
+            );
+            setTickets(stored);
+          } catch {
+            setTickets([]);
+          }
+        }
+      })
+      .catch(() => {
+        // Network error — fall back to localStorage
+        try {
+          const stored = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
+          stored.sort((a: PurchasedTicket, b: PurchasedTicket) =>
+            new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
+          );
+          setTickets(stored);
+        } catch {
+          setTickets([]);
+        }
+      });
 
+    // Fetch events to find cancelled ones
     fetch("/api/events")
       .then((r) => r.ok ? r.json() : [])
       .then((events: { title: string; cancelled?: boolean }[]) => {

@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import HomePageClient from "../components/home/HomePageClient";
 
+export const dynamic = "force-dynamic";
 const CATEGORY_THUMBNAILS: Record<string, string> = {
   "Music":        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070",
   "Sports":       "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931",

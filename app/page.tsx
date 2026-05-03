@@ -1,6 +1,6 @@
+import { auth } from "@clerk/nextjs/server";
 import HomePageClient from "../components/home/HomePageClient";
 
-// ── Category thumbnails for events with uploaded (base64) photos ──────────────
 const CATEGORY_THUMBNAILS: Record<string, string> = {
   "Music":        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070",
   "Sports":       "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931",
@@ -19,26 +19,33 @@ interface TrendingEvent {
   price: string; image: string; category: string; aiTag: string;
 }
 
-// Server-side Redis fetch — runs before the page is sent to the browser,
-// so trending events are in the HTML with zero client-side delay.
+interface UpcomingTicket {
+  id: string; title: string; type: string; price: number;
+  quantity: number; date: string; time: string;
+  location: string; image: string; purchasedAt: string;
+}
+
+async function redisGet<T>(key: string): Promise<T | null> {
+  const url   = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+
+  const res  = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const json = await res.json() as { result: string | null };
+  return json.result ? (JSON.parse(json.result) as T) : null;
+}
+
 async function fetchTrendingEvents(): Promise<TrendingEvent[]> {
   try {
-    const url   = process.env.KV_REST_API_URL;
-    const token = process.env.KV_REST_API_TOKEN;
-    if (!url || !token) return [];
-
-    const res  = await fetch(`${url}/get/${encodeURIComponent("nene:events")}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store", // always fresh — shows deleted events gone immediately
-    });
-    const json = await res.json() as { result: string | null };
-    if (!json.result) return [];
-
-    const raw = JSON.parse(json.result) as Array<{
+    const raw = await redisGet<Array<{
       id: string; title: string; date: string; location: string;
       price: string; image: string; category: string; aiTag?: string;
       createdAt?: string; cancelled?: boolean;
-    }>;
+    }>>("nene:events");
+    if (!raw) return [];
 
     return raw
       .filter((e) => !e.cancelled)
@@ -63,7 +70,35 @@ async function fetchTrendingEvents(): Promise<TrendingEvent[]> {
   }
 }
 
+async function fetchUpcomingTickets(userId: string): Promise<UpcomingTicket[]> {
+  try {
+    const tickets = await redisGet<UpcomingTicket[]>(`nene:tickets:${userId}`);
+    if (!tickets) return [];
+
+    const now = new Date();
+    return tickets
+      .filter((t) => {
+        try { return new Date(t.date).getTime() >= now.getTime(); }
+        catch { return true; }
+      })
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
 export default async function Home() {
-  const trendingEvents = await fetchTrendingEvents();
-  return <HomePageClient trendingEvents={trendingEvents} />;
+  const { userId } = await auth();
+
+  const [trendingEvents, upcomingTickets] = await Promise.all([
+    fetchTrendingEvents(),
+    userId ? fetchUpcomingTickets(userId) : Promise.resolve([]),
+  ]);
+
+  return (
+    <HomePageClient
+      trendingEvents={trendingEvents}
+      upcomingTickets={upcomingTickets}
+    />
+  );
 }

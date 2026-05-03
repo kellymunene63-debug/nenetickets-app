@@ -386,7 +386,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
       <div className="container mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-5 gap-10">
 
-        {/* LEFT: Content */}
+        {/* LEFT: Content (row 1 on desktop) */}
         <div className="lg:col-span-3 space-y-8">
 
           <section>
@@ -452,12 +452,10 @@ export default function EventPage({ params }: { params: { id: string } }) {
               <Info className="w-4 h-4" /> Tap a zone to select your ticket type
             </p>
           </div>
-
-          <ReviewSection eventId={params.id} />
         </div>
 
-        {/* RIGHT: Sticky sidebar */}
-        <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-24 h-fit">
+        {/* RIGHT: Sticky sidebar — spans 2 rows on desktop so reviews sit beside it */}
+        <div className="lg:col-span-2 lg:row-span-2 space-y-4 lg:sticky lg:top-24 h-fit">
 
           <div className="bg-white/5 border border-white/10 p-6 rounded-2xl shadow-xl">
             <h3 className="text-lg font-bold mb-4">Select Ticket</h3>
@@ -601,6 +599,11 @@ export default function EventPage({ params }: { params: { id: string } }) {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Reviews — row 2 col 1-3 on desktop; after ticket selection on mobile */}
+        <div className="lg:col-span-3">
+          <ReviewSection eventId={params.id} />
         </div>
       </div>
 

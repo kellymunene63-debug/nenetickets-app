@@ -10,8 +10,26 @@ export const metadata: Metadata = {
   description: "Discover and book tickets for the best concerts, sports matches, and conferences in Kenya.",
 };
 
-// Placeholder for events with uploaded (base64) photos — avoids bloating the HTML
+// Category-specific thumbnails used when an event has an uploaded (base64) photo.
+// Base64 images can be 500KB+ each — embedding them server-side would bloat the HTML.
+// The event detail page (app/event/[id]) always shows the real uploaded image.
+const CATEGORY_THUMBNAILS: Record<string, string> = {
+  "Music":       "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070",
+  "Sports":      "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1931",
+  "Business":    "https://images.unsplash.com/photo-1544531586-fde5298cdd40?q=80&w=2070",
+  "Arts":        "https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=2079",
+  "Tech":        "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=2070",
+  "Nightlife":   "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=2070",
+  "Adventure":   "https://images.unsplash.com/photo-1551632811-561732d1e306?q=80&w=2070",
+  "Food & Drink":"https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=2074",
+  "Charity":     "https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=2070",
+};
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070";
+
+function thumbnailFor(image: string, category: string): string {
+  if (!image?.startsWith("data:")) return image ?? FALLBACK_IMAGE;
+  return CATEGORY_THUMBNAILS[category] ?? FALLBACK_IMAGE;
+}
 
 // Server-side Redis fetch — runs at request time, so events appear in the
 // initial HTML with zero client-side delay.
@@ -46,8 +64,8 @@ async function fetchHostedEvents(): Promise<Event[]> {
         date:     e.date,
         location: e.location,
         price:    e.price,
-        // Don't embed base64 images in the page HTML — use placeholder instead
-        image:    e.image?.startsWith("data:") ? FALLBACK_IMAGE : (e.image ?? FALLBACK_IMAGE),
+        // Use category-matching stock thumbnail for uploaded images (base64 too large for HTML)
+        image:    thumbnailFor(e.image, e.category),
         category: e.category,
         aiTag:    e.aiTag ?? "New Added ✨",
       }));

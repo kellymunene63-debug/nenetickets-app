@@ -165,7 +165,7 @@ function CheckoutContent() {
         return;
       }
 
-      // Save ticket to localStorage
+      // Save ticket to Redis (primary) — fire-and-forget so checkout never blocks
       const ticket = {
         id: ticketId,
         title, type, price: grandTotal, quantity,
@@ -173,9 +173,17 @@ function CheckoutContent() {
         purchasedAt: new Date().toISOString(),
         reference,
       };
-      const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
-      existing.push(ticket);
-      localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
+      fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ticket),
+      }).catch(() => {/* silent — localStorage below is the fallback */});
+      // localStorage fallback (offline / unauthenticated users)
+      try {
+        const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
+        existing.push(ticket);
+        localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
+      } catch { /* storage unavailable */ }
 
       setConfirmedRef(reference);
       setStep("confirmed");
@@ -218,9 +226,18 @@ function CheckoutContent() {
       purchasedAt: new Date().toISOString(),
       reference: freeRef,
     };
-    const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
-    existing.push(ticket);
-    localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
+    // Save to Redis (primary)
+    fetch("/api/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ticket),
+    }).catch(() => {});
+    // localStorage fallback
+    try {
+      const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
+      existing.push(ticket);
+      localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
+    } catch { /* storage unavailable */ }
 
     setConfirmedRef(freeRef);
     setStep("confirmed");

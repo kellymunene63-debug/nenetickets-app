@@ -154,11 +154,15 @@ function getDaysUntil(dateStr: string): number | null {
 export default function EventPage({ params }: { params: { id: string } }) {
   const staticEvent = EVENTS_DB[params.id] ?? null;
 
+  // For hosted (localStorage) events
   const [localEvent, setLocalEvent] = useState<EventData | null>(null);
   const [loadingLocal, setLoadingLocal] = useState(!staticEvent);
+
+  // Recommendations — includes localStorage events
   const [allLocalEvents, setAllLocalEvents] = useState<{ id: string; data: EventData }[]>([]);
 
   useEffect(() => {
+    // Fetch from KV database (cross-browser) with localStorage fallback
     fetch("/api/events")
       .then((r) => r.json())
       .then((stored: {
@@ -178,6 +182,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
         }
       })
       .catch(() => {
+        // Fallback to localStorage
         try {
           const stored = JSON.parse(localStorage.getItem("nene_events") ?? "[]");
           const localList = stored.map((ev: { id: string }) => ({ id: ev.id, data: normaliseLocalEvent(ev as Parameters<typeof normaliseLocalEvent>[0]) }));
@@ -204,8 +209,10 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
   const daysUntil = event ? getDaysUntil(event.date) : null;
 
+  // Recommendations: same category first, then others — exclude current, max 3
   const recommendations = useMemo(() => {
     if (!event) return [];
+    // Combine EVENTS_DB + localStorage events
     const dbEntries = Object.entries(EVENTS_DB)
       .filter(([id]) => id !== params.id)
       .map(([id, e]) => ({ id, ...e }));
@@ -218,6 +225,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
     return [...sameCategory, ...others].slice(0, 3);
   }, [params.id, event, allLocalEvents]);
 
+  // Fetch capacity data for hosted events
   useEffect(() => {
     fetch(`/api/events/${params.id}/capacity`)
       .then((r) => r.ok ? r.json() : {})
@@ -225,6 +233,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
       .catch(() => {});
   }, [params.id]);
 
+  // Register viewer + poll
   useEffect(() => {
     if (!event) return;
     const register = async () => {
@@ -246,6 +255,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
     return () => clearInterval(interval);
   }, [params.id, event]);
 
+  // ── Loading state ─────────────────────────────────────────────────────────
   if (loadingLocal) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -255,6 +265,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
     );
   }
 
+  // ── Not found ─────────────────────────────────────────────────────────────
   if (!event) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center flex-col gap-4 pt-20">
@@ -269,6 +280,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
     );
   }
 
+  // ── Ticket types ──────────────────────────────────────────────────────────
+  // For hosted events with custom ticket types, use them; else use Regular/VIP
   const hasCustomTickets = (event.ticketTypes?.length ?? 0) > 0;
   const regularLabel = hasCustomTickets ? (event.ticketTypes![0].name) : "Regular Admission";
   const vipLabel = hasCustomTickets && event.ticketTypes!.length > 1
@@ -281,6 +294,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const currentPrice = selectedTicket === "regular" ? regularPrice : vipPrice;
   const totalPrice = currentPrice * quantity;
 
+  // Sold-out checks
   const regularCapData = capacity[regularLabel];
   const vipCapData     = capacity[vipLabel];
   const regularSoldOut = regularCapData?.soldOut ?? false;
@@ -301,7 +315,18 @@ export default function EventPage({ params }: { params: { id: string } }) {
   };
 
   const selectedTicketName = selectedTicket === "regular" ? regularLabel : vipLabel;
-  const checkoutUrl = `/checkout?title=${encodeURIComponent(event.title)}&type=${encodeURIComponent(selectedTicketName)}&price=${currentPrice}&quantity=${quantity}&date=${encodeURIComponent(event.date)}&time=${encodeURIComponent(event.time)}&location=${encodeURIComponent(event.location)}&image=${encodeURIComponent(event.image)}&eventId=${encodeURIComponent(params.id)}`;
+
+  // If the event image is a base64 data URL (uploaded photo), it's too large
+  // to fit in a query string. Save it to sessionStorage and pass a flag instead.
+  const isBase64Image = event.image?.startsWith("data:");
+  const imageParam = isBase64Image ? "__session__" : event.image;
+  const handlePayClick = () => {
+    if (isBase64Image) {
+      try { sessionStorage.setItem("nene_checkout_image", event.image); } catch { /* silent */ }
+    }
+  };
+
+  const checkoutUrl = `/checkout?title=${encodeURIComponent(event.title)}&type=${encodeURIComponent(selectedTicketName)}&price=${currentPrice}&quantity=${quantity}&date=${encodeURIComponent(event.date)}&time=${encodeURIComponent(event.time)}&location=${encodeURIComponent(event.location)}&image=${encodeURIComponent(imageParam)}&eventId=${encodeURIComponent(params.id)}`;
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -371,6 +396,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
             </p>
           </section>
 
+          {/* Live viewers */}
           {viewers !== null && (
             <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400">
               <Eye className="w-5 h-5 flex-shrink-0 animate-pulse" />
@@ -469,7 +495,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
               </div>
             </div>
 
-            {/* VIP */}
+            {/* VIP — only shown if there's a second ticket type */}
             {hasVip && (
               <div
                 onClick={() => !vipSoldOut && setSelectedTicket("vip")}
@@ -543,7 +569,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 🚫 Sold Out
               </button>
             ) : (
-              <Link href={checkoutUrl}>
+              <Link href={checkoutUrl} onClick={handlePayClick}>
                 <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 active:scale-95">
                   {currentPrice === 0
                     ? <><Tag className="w-5 h-5" /> Reserve Free Ticket</>
@@ -578,7 +604,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* You might also like */}
+      {/* ── You might also like ────────────────────────────────────────────── */}
       {recommendations.length > 0 && (
         <section className="border-t border-white/5 bg-white/[0.02] py-16">
           <div className="container mx-auto px-6">

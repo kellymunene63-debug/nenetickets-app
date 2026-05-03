@@ -5,6 +5,7 @@ import EventsClient from "../../components/events/EventsClient";
 import { DEFAULT_EVENTS } from "../../libs/events";
 import type { Event } from "../../libs/events";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Browse Events",
   description: "Discover and book tickets for the best concerts, sports matches, and conferences in Kenya.",

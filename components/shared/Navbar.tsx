@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { Menu, X, ChevronRight, Ticket } from "lucide-react";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
@@ -29,10 +30,12 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link href="/" onClick={close} className="flex items-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/logo.png"
             alt="NeneTickets"
+            width={160}
+            height={40}
+            priority
             className="h-10 w-auto object-contain"
           />
         </Link>

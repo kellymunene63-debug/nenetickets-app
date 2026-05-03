@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -25,13 +25,14 @@ interface TrendingEvent {
 
 interface UpcomingTicket {
   id: string;
-  eventTitle: string;
-  date: string;
-  location: string;
-  price: string;
+  title: string;
+  type: string;
+  price: number;
   quantity: number;
+  date: string;
+  time: string;
+  location: string;
   image: string;
-  category: string;
   purchasedAt: string;
 }
 
@@ -100,32 +101,15 @@ const TESTIMONIALS = [
   },
 ];
 
-export default function HomePageClient({ trendingEvents }: { trendingEvents: TrendingEvent[] }) {
+export default function HomePageClient({
+  trendingEvents,
+  upcomingTickets,
+}: {
+  trendingEvents: TrendingEvent[];
+  upcomingTickets: UpcomingTicket[];
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [upcomingTickets, setUpcomingTickets] = useState<UpcomingTicket[]>([]);
-
-  // Load upcoming tickets from localStorage (purchases made on this device)
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("nene_tickets");
-      if (stored) {
-        const parsed = JSON.parse(stored) as UpcomingTicket[];
-        // Only show future/upcoming events
-        const now = new Date();
-        const upcoming = parsed.filter((t) => {
-          try {
-            return new Date(t.date).getTime() >= now.getTime();
-          } catch {
-            return true; // keep if date can't be parsed
-          }
-        });
-        setUpcomingTickets(upcoming.slice(0, 3));
-      }
-    } catch {
-      // silent
-    }
-  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -364,7 +348,7 @@ export default function HomePageClient({ trendingEvents }: { trendingEvents: Tre
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={ticket.image}
-                        alt={ticket.eventTitle}
+                        alt={ticket.title}
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
@@ -375,9 +359,10 @@ export default function HomePageClient({ trendingEvents }: { trendingEvents: Tre
                       </div>
                     </div>
                     <div className="p-4">
-                      <h3 className="font-bold text-white text-sm mb-2 line-clamp-1">{ticket.eventTitle}</h3>
+                      <h3 className="font-bold text-white text-sm mb-2 line-clamp-1">{ticket.title}</h3>
                       <div className="flex items-center text-gray-500 text-xs mb-1 gap-1.5">
                         <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> {ticket.date}
+                        {ticket.time && ` at ${ticket.time}`}
                       </div>
                       <div className="flex items-center text-gray-500 text-xs mb-3 gap-1.5">
                         <MapPin className="w-3.5 h-3.5 flex-shrink-0" /> {ticket.location}

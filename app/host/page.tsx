@@ -498,15 +498,30 @@ export default function HostPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setFormData((prev) => ({ ...prev, image: ev.target?.result as string }));
-    };
-    reader.readAsDataURL(file);
-  };
+  const [imageUploading, setImageUploading] = useState(false);
+
+const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  // Show instant local preview
+  setFormData((prev) => ({ ...prev, image: URL.createObjectURL(file) }));
+  setImageUploading(true);
+
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: form });
+    if (!res.ok) throw new Error("Upload failed");
+    const data = await res.json() as { url: string };
+    setFormData((prev) => ({ ...prev, image: data.url })); // replace blob URL with real ImgBB URL
+  } catch {
+    alert("Image upload failed. Please try again.");
+    setFormData((prev) => ({ ...prev, image: STOCK_IMAGES[0].value }));
+  } finally {
+    setImageUploading(false);
+  }
+};
 
   const addTicket = () => {
     if (newTicket.name && newTicket.price) {
@@ -1288,14 +1303,22 @@ export default function HostPage() {
                     <Upload className="w-3 h-3" /> Cover Image
                   </label>
                   <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                  <div className="flex flex-col gap-3">
-                    <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-white/15 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition text-center group">
-                      <div className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-600/20 transition">
-                        <Upload className="w-4 h-4 text-blue-400" />
-                      </div>
-                      <span className="text-xs font-bold text-gray-400 group-hover:text-white">Upload Photo</span>
-                      <span className="text-xs text-gray-600 mt-0.5">JPG, PNG, WebP</span>
-                    </div>
+                  <div className="relative">
+  <div onClick={() => !imageUploading && fileInputRef.current?.click()}
+    className="border-2 border-dashed border-white/15 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition text-center group">
+    <div className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-600/20 transition">
+      <Upload className="w-4 h-4 text-blue-400" />
+    </div>
+    <span className="text-xs font-bold text-gray-400 group-hover:text-white">Upload Photo</span>
+    <span className="text-xs text-gray-600 mt-0.5">JPG, PNG, WebP · max 32MB</span>
+  </div>
+  {imageUploading && (
+    <div className="absolute inset-0 bg-black/70 rounded-xl flex flex-col items-center justify-center gap-2">
+      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+      <span className="text-white text-xs font-bold">Uploading…</span>
+    </div>
+  )}
+</div>
                     <div className="relative">
                       <p className="text-xs text-gray-600 mb-1.5">Or pick a stock image</p>
                       <select
@@ -1402,7 +1425,7 @@ export default function HostPage() {
 
                 <button
                   onClick={handlePublish}
-                  disabled={isLoading || tickets.length === 0 || !formData.title || !formData.date || !formData.location}
+                  disabled={isLoading || imageUploading || tickets.length === 0 || !formData.title || !formData.date || !formData.location}
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
                 >
                   {isLoading

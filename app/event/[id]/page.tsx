@@ -318,13 +318,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
   // If the event image is a base64 data URL (uploaded photo), it's too large
   // to fit in a query string. Save it to sessionStorage and pass a flag instead.
-  const isBase64Image = event.image?.startsWith("data:");
-  const imageParam = isBase64Image ? "__session__" : event.image;
-  const handlePayClick = () => {
-    if (isBase64Image) {
-      try { sessionStorage.setItem("nene_checkout_image", event.image); } catch { /* silent */ }
-    }
-  };
+  const imageParam = event.image ?? "";
+// Remove onClick={handlePayClick} from the Link/button
 
   const checkoutUrl = `/checkout?title=${encodeURIComponent(event.title)}&type=${encodeURIComponent(selectedTicketName)}&price=${currentPrice}&quantity=${quantity}&date=${encodeURIComponent(event.date)}&time=${encodeURIComponent(event.time)}&location=${encodeURIComponent(event.location)}&image=${encodeURIComponent(imageParam)}&eventId=${encodeURIComponent(params.id)}`;
 

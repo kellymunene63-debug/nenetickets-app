@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Filter, Search, SlidersHorizontal, X, ChevronDown, Calendar, MapPin, Zap } from "lucide-react";
 import type { Event } from "../../libs/events";
 
-const CATEGORIES = ["All", "Music", "Sports", "Business", "Arts", "Tech", "Nightlife"];
+const CATEGORIES = ["All", "Music", "Sports", "Business", "Arts", "Tech", "Nightlife", "Adventure"];
 
 type SortKey = "date-asc" | "date-desc" | "price-asc" | "price-desc";
 
@@ -43,29 +43,8 @@ export default function EventsClient({ defaultEvents }: { defaultEvents: Event[]
   const [maxPrice, setMaxPrice] = useState(10000);
   const [sortOpen, setSortOpen] = useState(false);
 
-  useEffect(() => {
-    // Fetch organizer-created events from the database (cross-browser)
-    fetch("/api/events")
-      .then((r) => r.json())
-      .then((hostedEvents: Event[]) => {
-        if (Array.isArray(hostedEvents) && hostedEvents.length > 0) {
-          // Merge: hosted events first, then default events (avoid duplicates by id)
-          const defaultIds = new Set(defaultEvents.map((e) => e.id));
-          const newHosted = hostedEvents.filter((e) => !defaultIds.has(e.id));
-          setAllEvents([...newHosted, ...defaultEvents]);
-        }
-      })
-      .catch(() => {
-        // Fallback to localStorage if API is down
-        try {
-          const saved = localStorage.getItem("nene_events");
-          if (saved) {
-            const parsed: Event[] = JSON.parse(saved);
-            setAllEvents([...parsed, ...defaultEvents]);
-          }
-        } catch { /* silent */ }
-      });
-  }, [defaultEvents]);
+  // Events (including user-created ones) are now fetched server-side in
+  // app/events/page.tsx and passed in as defaultEvents — no client fetch needed.
 
   const maxPossiblePrice = useMemo(() => {
     const prices = allEvents.map((e) => parsePrice(e.price));

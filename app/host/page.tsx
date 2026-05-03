@@ -453,10 +453,15 @@ export default function HostPage() {
           body: JSON.stringify(updates),
         });
       } catch { /* silent */ }
+      // Update state directly — no re-fetch needed
+      setMyEvents((prev) =>
+        prev.map((e) =>
+          e.id === editingEvent.id ? { ...e, ...updates } : e
+        )
+      );
       setPublishedId(editingEvent.id);
       setIsLoading(false);
       setIsPublished(true);
-      loadDashboardData();
     } else {
       // Create new event via API
       const id = Date.now().toString();
@@ -482,10 +487,11 @@ export default function HostPage() {
           body: JSON.stringify(newEvent),
         });
       } catch { /* silent */ }
+      // Add to state directly — no re-fetch needed
+      setMyEvents((prev) => [newEvent, ...prev]);
       setPublishedId(id);
       setIsLoading(false);
       setIsPublished(true);
-      loadDashboardData();
     }
   };
 

@@ -73,8 +73,13 @@ function CheckoutContent() {
   const date     = params.get("date")     ?? "";
   const time     = params.get("time")     ?? "";
   const location = params.get("location") ?? "";
-  const image    = params.get("image")    ?? "";
   const eventId  = params.get("eventId")  ?? "";
+
+  // Restore base64 image from sessionStorage if it was too large for the URL
+  const rawImage = params.get("image") ?? "";
+  const image = rawImage === "__session__"
+    ? (typeof window !== "undefined" ? sessionStorage.getItem("nene_checkout_image") ?? "" : "")
+    : rawImage;
 
   const total      = price * quantity;
   const serviceFee = Math.round(total * 0.03);

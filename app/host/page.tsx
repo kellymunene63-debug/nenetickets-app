@@ -11,6 +11,7 @@ import {
   ToggleLeft, ToggleRight, Percent, BadgeDollarSign
 } from "lucide-react";
 import Link from "next/link";
+import { uploadImage } from "../../libs/uploadImage";
 
 interface TicketType {
   name: string;
@@ -120,6 +121,7 @@ export default function HostPage() {
   const [attendeeSearch, setAttendeeSearch] = useState("");
   const [dashTab, setDashTab] = useState<"events" | "promos">("events");
   const [promoCodes, setPromoCodes] = useState<Record<string, PromoCode>>(DEFAULT_PROMOS);
+  const [imageUploading, setImageUploading] = useState(false);
   const [newPromo, setNewPromo] = useState({ code: "", discount: "", type: "percent" as "percent" | "fixed", description: "" });
   const [promoSaved, setPromoSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -498,30 +500,26 @@ export default function HostPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const [imageUploading, setImageUploading] = useState(false);
-
-const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
-  // Show instant local preview
-  setFormData((prev) => ({ ...prev, image: URL.createObjectURL(file) }));
-  setImageUploading(true);
-
-  try {
-    const form = new FormData();
-    form.append("file", file);
-    const res = await fetch("/api/upload", { method: "POST", body: form });
-    if (!res.ok) throw new Error("Upload failed");
-    const data = await res.json() as { url: string };
-    setFormData((prev) => ({ ...prev, image: data.url })); // replace blob URL with real ImgBB URL
-  } catch {
-    alert("Image upload failed. Please try again.");
-    setFormData((prev) => ({ ...prev, image: STOCK_IMAGES[0].value }));
-  } finally {
-    setImageUploading(false);
-  }
-};
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Show local preview immediately
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setFormData((prev) => ({ ...prev, image: ev.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+    // Upload to ImgBB in background
+    try {
+      setImageUploading(true);
+      const url = await uploadImage(file);
+      setFormData((prev) => ({ ...prev, image: url }));
+    } catch {
+      // Keep local preview on failure — silent
+    } finally {
+      setImageUploading(false);
+    }
+  };
 
   const addTicket = () => {
     if (newTicket.name && newTicket.price) {
@@ -1303,22 +1301,21 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                     <Upload className="w-3 h-3" /> Cover Image
                   </label>
                   <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                  <div className="relative">
-  <div onClick={() => !imageUploading && fileInputRef.current?.click()}
-    className="border-2 border-dashed border-white/15 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition text-center group">
-    <div className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-600/20 transition">
-      <Upload className="w-4 h-4 text-blue-400" />
-    </div>
-    <span className="text-xs font-bold text-gray-400 group-hover:text-white">Upload Photo</span>
-    <span className="text-xs text-gray-600 mt-0.5">JPG, PNG, WebP · max 32MB</span>
-  </div>
-  {imageUploading && (
-    <div className="absolute inset-0 bg-black/70 rounded-xl flex flex-col items-center justify-center gap-2">
-      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-      <span className="text-white text-xs font-bold">Uploading…</span>
-    </div>
-  )}
-</div>
+                  <div className="flex flex-col gap-3">
+                    <div className="relative">
+                      <div onClick={() => !imageUploading && fileInputRef.current?.click()} className={`border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition text-center group ${imageUploading ? "border-blue-500/40 bg-blue-500/5 cursor-wait" : "border-white/15 hover:border-blue-500 hover:bg-blue-500/5"}`}>
+                        <div className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-600/20 transition">
+                          {imageUploading
+                            ? <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                            : <Upload className="w-4 h-4 text-blue-400" />
+                          }
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 group-hover:text-white">
+                          {imageUploading ? "Uploading…" : "Upload Photo"}
+                        </span>
+                        <span className="text-xs text-gray-600 mt-0.5">JPG, PNG, WebP</span>
+                      </div>
+                    </div>
                     <div className="relative">
                       <p className="text-xs text-gray-600 mb-1.5">Or pick a stock image</p>
                       <select

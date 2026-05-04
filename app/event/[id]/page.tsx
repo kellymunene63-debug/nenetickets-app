@@ -111,8 +111,17 @@ function NotFound() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default async function EventPage({ params }: { params: { id: string } }) {
-  const id = params.id;
+  // Top-level catch: server component must NEVER throw — any uncaught error
+  // would cause React error #419 (hydration crash) on the client.
+  try {
+    return await renderEventPage(params.id);
+  } catch (err) {
+    console.error("[EventPage] Unexpected crash for id", params.id, err);
+    return <NotFound />;
+  }
+}
 
+async function renderEventPage(id: string) {
   // ── Fast path: static events — zero Redis calls ───────────────────────────
   if (STATIC_IDS.has(id)) {
     const raw = EVENTS_DB[id];

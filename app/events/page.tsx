@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
 import Navbar from "../../components/shared/Navbar";
 import EventsClient from "../../components/events/EventsClient";
 import { DEFAULT_EVENTS } from "../../libs/events";
 import type { Event } from "../../libs/events";
 
-export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Browse Events",
   description: "Discover and book tickets for the best concerts, sports matches, and conferences in Kenya.",
@@ -42,7 +43,7 @@ async function fetchHostedEvents(): Promise<Event[]> {
 
     const res  = await fetch(`${url}/get/${encodeURIComponent("nene:events")}`, {
       headers: { Authorization: `Bearer ${token}` },
-      next: { revalidate: 30 }, // refresh every 30 s on Vercel
+      cache: "no-store", // always fetch fresh — events must appear immediately after creation
     });
     const json = await res.json() as { result: string | null };
     if (!json.result) return [];

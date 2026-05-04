@@ -271,54 +271,62 @@ export default function HostPage() {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    // Optimistic update — remove immediately so UI feels instant
     setDeleteConfirm(null);
-    setMyEvents((prev) => prev.filter((e) => e.id !== eventId));
-    // Persist to Redis in the background
     try {
-      await fetch(`/api/events/${eventId}`, { method: "DELETE" });
-    } catch { /* silent — UI already updated */ }
+      const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      // Confirmed deleted — remove from UI and re-sync from Redis
+      setMyEvents((prev) => prev.filter((e) => e.id !== eventId));
+      // Re-fetch to make sure local state matches Redis
+      setTimeout(() => loadDashboardData(), 500);
+    } catch {
+      alert("Could not delete the event. Please try again.");
+    }
   };
 
   const handleCancelEvent = async (eventId: string) => {
-    // Optimistic update
     setCancelConfirm(null);
     const reason = cancelReason;
     setCancelReason("");
-    setMyEvents((prev) =>
-      prev.map((e) =>
-        e.id === eventId
-          ? { ...e, cancelled: true, cancelReason: reason, cancelledAt: new Date().toISOString() }
-          : e
-      )
-    );
-    // Persist to Redis in the background
     try {
-      await fetch(`/api/events/${eventId}`, {
+      const res = await fetch(`/api/events/${eventId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cancelled: true, cancelReason: reason }),
       });
-    } catch { /* silent */ }
+      if (!res.ok) throw new Error("Cancel failed");
+      setMyEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId
+            ? { ...e, cancelled: true, cancelReason: reason, cancelledAt: new Date().toISOString() }
+            : e
+        )
+      );
+      setTimeout(() => loadDashboardData(), 500);
+    } catch {
+      alert("Could not cancel the event. Please try again.");
+    }
   };
 
   const handleRestoreEvent = async (eventId: string) => {
-    // Optimistic update
-    setMyEvents((prev) =>
-      prev.map((e) =>
-        e.id === eventId
-          ? { ...e, cancelled: false, cancelReason: "", cancelledAt: null }
-          : e
-      )
-    );
-    // Persist to Redis in the background
     try {
-      await fetch(`/api/events/${eventId}`, {
+      const res = await fetch(`/api/events/${eventId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cancelled: false }),
       });
-    } catch { /* silent */ }
+      if (!res.ok) throw new Error("Restore failed");
+      setMyEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId
+            ? { ...e, cancelled: false, cancelReason: "", cancelledAt: null }
+            : e
+        )
+      );
+      setTimeout(() => loadDashboardData(), 500);
+    } catch {
+      alert("Could not restore the event. Please try again.");
+    }
   };
 
   const startEditEvent = (event: OrganizerEvent) => {

@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 import Navbar from "../shared/Navbar";
-import Footer from "../shared/Footer";
 import EventCard from "./EventCard";
 
 interface TrendingEvent {
@@ -396,7 +395,6 @@ export default function HomePageClient({
         </div>
       </section>
 
-      <Footer />
     </main>
   );
 }

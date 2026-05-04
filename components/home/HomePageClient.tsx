@@ -144,17 +144,52 @@ export default function HomePageClient({
             <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mr-1">
               Secure payments via
             </span>
-            <span className="flex items-center gap-1.5 bg-green-600/20 border border-green-500/30 text-green-400 text-xs font-bold px-3 py-1.5 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-green-400" /> M-Pesa
+
+            {/* M-Pesa */}
+            <span className="flex items-center gap-2 bg-green-600/20 border border-green-500/30 px-3 py-1.5 rounded-full">
+              {/* M-Pesa: green circle + wordmark */}
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="9" cy="9" r="9" fill="#00A550"/>
+                <path d="M4.5 12V7L6.8 10.5L9 7L11.2 10.5L13.5 7V12" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              </svg>
+              <span className="text-green-400 text-xs font-bold tracking-wide">M-PESA</span>
             </span>
-            <span className="flex items-center gap-1.5 bg-white/5 border border-white/10 text-gray-300 text-xs font-bold px-3 py-1.5 rounded-full">
-              VISA
+
+            {/* Visa */}
+            <span className="flex items-center gap-2 bg-[#1A1F71]/40 border border-[#1A1F71]/60 px-3 py-1.5 rounded-full">
+              <svg width="36" height="12" viewBox="0 0 36 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* VISA wordmark — italic bold */}
+                <text
+                  x="18" y="10"
+                  textAnchor="middle"
+                  fontFamily="Arial, sans-serif"
+                  fontSize="13"
+                  fontWeight="900"
+                  fontStyle="italic"
+                  fill="white"
+                  letterSpacing="0.5"
+                >VISA</text>
+              </svg>
             </span>
-            <span className="flex items-center gap-1.5 bg-white/5 border border-white/10 text-gray-300 text-xs font-bold px-3 py-1.5 rounded-full">
-              Mastercard
+
+            {/* Mastercard */}
+            <span className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
+              <svg width="30" height="18" viewBox="0 0 30 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="11" cy="9" r="9" fill="#EB001B"/>
+                <circle cx="19" cy="9" r="9" fill="#F79E1B"/>
+                {/* Overlap — blended orange */}
+                <path d="M15 2.8C16.7 4.1 17.8 6.1 17.8 8.4C17.8 10.7 16.7 12.7 15 14C13.3 12.7 12.2 10.7 12.2 8.4C12.2 6.1 13.3 4.1 15 2.8Z" fill="#FF5F00"/>
+              </svg>
+              <span className="text-gray-300 text-xs font-bold">Mastercard</span>
             </span>
+
+            {/* SSL */}
             <span className="flex items-center gap-1.5 bg-green-600/10 border border-green-500/20 text-green-400 text-xs font-bold px-3 py-1.5 rounded-full">
-              🔒 SSL Secured
+              <svg width="11" height="13" viewBox="0 0 11 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5.5 0.5L1 2.5V6C1 9 3 11.8 5.5 12.5C8 11.8 10 9 10 6V2.5L5.5 0.5Z" fill="#4ADE80" fillOpacity="0.2" stroke="#4ADE80" strokeWidth="0.8"/>
+                <path d="M3.5 6.5L5 8L7.5 5" stroke="#4ADE80" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              SSL Secured
             </span>
           </div>
         </div>

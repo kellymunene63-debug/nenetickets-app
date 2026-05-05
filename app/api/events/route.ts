@@ -8,9 +8,6 @@ type StoredEvent = Record<string, unknown>;
 
 // ── Redis helpers ─────────────────────────────────────────────────────────────
 
-// Robust get: handles raw-string, single-encoded, and double-encoded results.
-// Upstash may return result as a string or already-parsed value depending on
-// how the data was originally stored — this handles all cases.
 async function redisGet<T>(key: string): Promise<T | null> {
   const url   = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -26,15 +23,11 @@ async function redisGet<T>(key: string): Promise<T | null> {
   if (json.result === null || json.result === undefined) return null;
 
   let data: unknown = json.result;
-  // Unwrap string encoding: parse once (normal), then again if double-encoded
   if (typeof data === "string") data = JSON.parse(data);
-  if (typeof data === "string") data = JSON.parse(data);
+  if (typeof data === "string") data = JSON.parse(data); // double-encoding fallback
   return data as T;
 }
 
-// Stores the value as a plain JSON string body (single-encoded).
-// Upstash /set/{key} with Content-Type text/plain stores the body bytes as-is,
-// so JSON.stringify(value) is stored verbatim and read back with one JSON.parse.
 async function redisSet(key: string, value: unknown): Promise<void> {
   const url   = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -43,7 +36,7 @@ async function redisSet(key: string, value: unknown): Promise<void> {
   const res = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
     method:  "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "text/plain" },
-    body:    JSON.stringify(value),   // single-encode: no extra JSON.stringify wrapper
+    body:    JSON.stringify(value),
   });
 
   if (!res.ok) {
@@ -59,11 +52,21 @@ function stripBase64(e: StoredEvent): StoredEvent {
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
-export async function GET() {
+// GET /api/events           → public: only approved events
+// GET /api/events?admin=1   → admin: all events (used by admin panel)
+export async function GET(req: Request) {
   try {
-    const data = await redisGet<unknown>(KEY);
-    const events = Array.isArray(data) ? data : [];
-    return NextResponse.json(events);
+    const isAdmin = new URL(req.url).searchParams.get("admin") === "1";
+    const data    = await redisGet<unknown>(KEY);
+    const events  = Array.isArray(data) ? data as StoredEvent[] : [];
+
+    if (isAdmin) return NextResponse.json(events);
+
+    // Public view: only return approved events (and legacy events with no status field)
+    const visible = events.filter(
+      (e) => !e.status || e.status === "approved"
+    );
+    return NextResponse.json(visible);
   } catch (err) {
     console.error("GET /api/events:", err);
     return NextResponse.json([]);
@@ -74,9 +77,15 @@ export async function POST(req: Request) {
   try {
     const event = await req.json() as StoredEvent;
 
-    const cleanNew  = stripBase64(event);
+    // All new events start as "pending" — they go live only after admin approval
+    const cleanNew: StoredEvent = {
+      ...stripBase64(event),
+      status:    event.status ?? "pending",
+      createdAt: event.createdAt ?? new Date().toISOString(),
+    };
+
     const rawExisting = await redisGet<unknown>(KEY);
-    const existing  = Array.isArray(rawExisting)
+    const existing    = Array.isArray(rawExisting)
       ? (rawExisting as StoredEvent[]).map(stripBase64)
       : [];
 

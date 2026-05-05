@@ -220,7 +220,7 @@ export default function PricingPage() {
           <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-amber-200/70 leading-relaxed">
             <strong className="text-amber-300">Refund policy:</strong> When an organizer cancels an event or issues a refund,
-            the ticket price is refunded from the organizer's earnings. The 3% booking fee paid by the buyer
+            the ticket price is refunded from the organizer&apos;s earnings. The 3% booking fee paid by the buyer
             is <strong className="text-amber-300">non-refundable</strong> as it covers costs already incurred during the transaction.
           </p>
         </div>

@@ -132,6 +132,20 @@ export default function HostPage() {
   const [authError, setAuthError] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
 
+  // Multi-step signup state
+  const [signupStep, setSignupStep] = useState<"info" | "bank" | "otp">("info");
+  const [signupData, setSignupData] = useState<{ name: string; email: string; phone: string; password: string } | null>(null);
+  const [banks, setBanks] = useState<Array<{ name: string; code: string }>>([]);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [selectedBank, setSelectedBank] = useState<{ name: string; code: string } | null>(null);
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [subaccountLoading, setSubaccountLoading] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpResending, setOtpResending] = useState(false);
+
   const loadDashboardData = useCallback(async (currentHost?: Host) => {
     const activeHost = currentHost ?? host;
     if (!activeHost) return;
@@ -206,30 +220,160 @@ export default function HostPage() {
     return score;
   };
 
-  const handleSignup = (e: React.FormEvent<HTMLFormElement>) => {
+  // Step 1 — collect basic info, then move to bank details
+  const handleSignupStep1 = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setAuthError("");
     const form = e.currentTarget;
-    const name = (form.elements.namedItem("name") as HTMLInputElement).value;
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value;
-    const phone = (form.elements.namedItem("phone") as HTMLInputElement).value;
-    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+    const name            = (form.elements.namedItem("name")            as HTMLInputElement).value.trim();
+    const email           = (form.elements.namedItem("email")           as HTMLInputElement).value.trim();
+    const phone           = (form.elements.namedItem("phone")           as HTMLInputElement).value.trim();
+    const password        = (form.elements.namedItem("password")        as HTMLInputElement).value;
     const confirmPassword = (form.elements.namedItem("confirmPassword") as HTMLInputElement).value;
 
     if (password !== confirmPassword) { setAuthError("Passwords do not match."); return; }
     if (passwordStrength < 3) { setAuthError("Password is too weak. Add uppercase, numbers, and symbols."); return; }
 
-    const newHost: Host = { name, email, phone, password, joined: new Date().toLocaleDateString("en-KE") };
     const existingUsers: Host[] = JSON.parse(localStorage.getItem("nene_users_db") || "[]");
     if (existingUsers.find((u) => u.email === email)) { setAuthError("An account with this email already exists."); return; }
 
-    existingUsers.push(newHost);
-    localStorage.setItem("nene_users_db", JSON.stringify(existingUsers));
-    localStorage.setItem("nene_active_session", JSON.stringify(newHost));
-    setHost(newHost);
-    loadDashboardData(newHost);
-    setView("dashboard");
+    setSignupData({ name, email, phone, password });
+    setSignupStep("bank");
+
+    // Pre-fetch bank list
+    setBankLoading(true);
+    fetch("/api/paystack/banks")
+      .then((r) => r.json())
+      .then((d: { banks: Array<{ name: string; code: string }> }) => setBanks(d.banks ?? []))
+      .catch(() => {})
+      .finally(() => setBankLoading(false));
   };
+
+  // Step 2 — bank details → create Paystack subaccount → send OTP
+  const handleSignupStep2 = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signupData || !selectedBank) { setAuthError("Please select your bank."); return; }
+    if (!accountNumber.trim()) { setAuthError("Please enter your account number."); return; }
+    if (!accountName.trim()) { setAuthError("Please enter your account name."); return; }
+
+    setAuthError("");
+    setSubaccountLoading(true);
+
+    try {
+      // Create Paystack subaccount
+      const subRes  = await fetch("/api/paystack/subaccount", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          business_name:         signupData.name,
+          settlement_bank:       selectedBank.code,
+          account_number:        accountNumber.trim(),
+          primary_contact_email: signupData.email,
+          primary_contact_name:  signupData.name,
+          primary_contact_phone: signupData.phone,
+        }),
+      });
+      const subData = await subRes.json() as { success: boolean; subaccount_code?: string; error?: string };
+
+      // Subaccount creation failed — warn but don't block (can be fixed later)
+      if (!subData.success) {
+        console.warn("Subaccount warning:", subData.error);
+      }
+
+      // Store bank + subaccount info in signupData for later
+      const enrichedSignupData = {
+        ...signupData,
+        bankName:        selectedBank.name,
+        bankCode:        selectedBank.code,
+        accountNumber:   accountNumber.trim(),
+        accountName:     accountName.trim(),
+        subaccount_code: subData.subaccount_code ?? "",
+      };
+      setSignupData(enrichedSignupData as typeof signupData & typeof enrichedSignupData);
+
+      // Send OTP
+      await fetch("/api/email/otp", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: signupData.email, name: signupData.name }),
+      });
+
+      setSignupStep("otp");
+    } catch {
+      setAuthError("Something went wrong. Please try again.");
+    } finally {
+      setSubaccountLoading(false);
+    }
+  };
+
+  // Step 3 — verify OTP → create account → go to dashboard
+  const handleVerifyOtp = async () => {
+    if (!signupData || otpInput.length !== 6) { setOtpError("Enter the 6-digit code."); return; }
+    setOtpError("");
+    setOtpLoading(true);
+
+    try {
+      const res  = await fetch("/api/email/verify-otp", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: signupData.email, otp: otpInput }),
+      });
+      const data = await res.json() as { success: boolean; error?: string };
+
+      if (!data.success) { setOtpError(data.error ?? "Incorrect code."); return; }
+
+      // OTP confirmed — persist account
+      const enriched = signupData as typeof signupData & {
+        bankName?: string; bankCode?: string; accountNumber?: string;
+        accountName?: string; subaccount_code?: string;
+      };
+      const newHost: Host = {
+        name:            enriched.name,
+        email:           enriched.email,
+        phone:           enriched.phone,
+        password:        enriched.password,
+        joined:          new Date().toLocaleDateString("en-KE"),
+      };
+      const hostWithBank = {
+        ...newHost,
+        emailVerified:   true,
+        bankName:        enriched.bankName ?? "",
+        bankCode:        enriched.bankCode ?? "",
+        accountNumber:   enriched.accountNumber ?? "",
+        accountName:     enriched.accountName ?? "",
+        subaccount_code: enriched.subaccount_code ?? "",
+      };
+
+      const existingUsers: Host[] = JSON.parse(localStorage.getItem("nene_users_db") || "[]");
+      existingUsers.push(hostWithBank as unknown as Host);
+      localStorage.setItem("nene_users_db", JSON.stringify(existingUsers));
+      localStorage.setItem("nene_active_session", JSON.stringify(hostWithBank));
+      setHost(hostWithBank as unknown as Host);
+      loadDashboardData(hostWithBank as unknown as Host);
+      setView("dashboard");
+    } catch {
+      setOtpError("Something went wrong. Please try again.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const resendOtp = async () => {
+    if (!signupData) return;
+    setOtpResending(true);
+    try {
+      await fetch("/api/email/otp", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: signupData.email, name: signupData.name }),
+      });
+    } finally {
+      setOtpResending(false);
+    }
+  };
+
+  // Legacy handleSignup — not used (kept for type compatibility)
+  const handleSignup = handleSignupStep1;
 
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -593,63 +737,201 @@ export default function HostPage() {
               </div>
             )}
 
-            <form onSubmit={authMode === "login" ? handleLogin : handleSignup} className="space-y-4 relative z-10">
-              {authMode === "signup" && (
-                <>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Business / Organizer Name</label>
-                    <input name="name" required placeholder="e.g. Nene Events Ltd" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Phone Number</label>
-                    <input name="phone" type="tel" required placeholder="07XX XXX XXX" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
-                  </div>
-                </>
-              )}
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Email Address</label>
-                <input name="email" type="email" required placeholder="name@company.com" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+            {/* ── Step indicator (signup only) ── */}
+            {authMode === "signup" && (
+              <div className="flex items-center gap-2 mb-6 relative z-10">
+                {[{ n: 1, label: "Account" }, { n: 2, label: "Bank" }, { n: 3, label: "Verify" }].map(({ n, label }, i) => {
+                  const active = (signupStep === "info" && n === 1) || (signupStep === "bank" && n === 2) || (signupStep === "otp" && n === 3);
+                  const done   = (signupStep === "bank" && n === 1) || (signupStep === "otp" && n <= 2);
+                  return (
+                    <div key={n} className="flex items-center gap-2 flex-1">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition ${done ? "bg-green-500 text-white" : active ? "bg-blue-600 text-white" : "bg-white/10 text-gray-600"}`}>
+                        {done ? "✓" : n}
+                      </div>
+                      <span className={`text-xs font-bold ${active ? "text-white" : done ? "text-green-400" : "text-gray-600"}`}>{label}</span>
+                      {i < 2 && <div className="flex-1 h-px bg-white/10" />}
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Password</label>
-                <div className="relative">
-                  <input name="password" type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                    onChange={(e) => authMode === "signup" && checkPasswordStrength(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition pr-10 placeholder:text-gray-700" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-500 hover:text-white transition">
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+            )}
+
+            {/* ── Step 1: Basic info ── */}
+            {(authMode === "login" || signupStep === "info") && (
+              <form onSubmit={authMode === "login" ? handleLogin : handleSignupStep1} className="space-y-4 relative z-10">
+                {authMode === "signup" && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Business / Organizer Name</label>
+                      <input name="name" required placeholder="e.g. Nene Events Ltd" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Phone Number</label>
+                      <input name="phone" type="tel" required placeholder="07XX XXX XXX" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Email Address</label>
+                  <input name="email" type="email" required placeholder="name@company.com" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Password</label>
+                  <div className="relative">
+                    <input name="password" type={showPassword ? "text" : "password"} required placeholder="••••••••"
+                      onChange={(e) => authMode === "signup" && checkPasswordStrength(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition pr-10 placeholder:text-gray-700" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-500 hover:text-white transition">
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+                {authMode === "signup" && (
+                  <>
+                    <div className="space-y-1">
+                      <div className="flex gap-1 h-1.5">
+                        {[1,2,3,4].map((n) => (
+                          <div key={n} className={`flex-1 rounded-full transition-colors ${passwordStrength >= n ? (n <= 1 ? "bg-red-500" : n <= 2 ? "bg-yellow-500" : n <= 3 ? "bg-blue-500" : "bg-green-500") : "bg-gray-800"}`} />
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        {passwordStrength === 0 ? "Enter a password" : passwordStrength === 1 ? "Weak — add uppercase & numbers" : passwordStrength === 2 ? "Fair — add symbols" : passwordStrength === 3 ? "Good" : "Strong ✓"}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Confirm Password</label>
+                      <input name="confirmPassword" type="password" required placeholder="••••••••" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
+                    </div>
+                  </>
+                )}
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 mt-2">
+                  <Lock className="w-4 h-4" /> {authMode === "login" ? "Sign In to Dashboard" : "Continue →"}
+                </button>
+              </form>
+            )}
+
+            {/* ── Step 2: Bank details ── */}
+            {authMode === "signup" && signupStep === "bank" && (
+              <form onSubmit={handleSignupStep2} className="space-y-4 relative z-10">
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-2">
+                  <p className="text-xs text-blue-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" />
+                    Your bank details are needed to receive ticket payouts directly. NeneTickets deducts 5% per ticket sold.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Bank Name</label>
+                  {bankLoading ? (
+                    <div className="flex items-center gap-2 text-gray-500 text-sm p-3"><div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> Loading banks…</div>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        required
+                        value={selectedBank?.code ?? ""}
+                        onChange={(e) => {
+                          const b = banks.find((bk) => bk.code === e.target.value);
+                          setSelectedBank(b ?? null);
+                        }}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition appearance-none"
+                      >
+                        <option value="" disabled>Select your bank…</option>
+                        {banks.map((b, i) => (
+                          <option key={`${b.code}-${i}`} value={b.code}>{b.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-3.5 w-4 h-4 text-gray-500 pointer-events-none" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Account Number</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    maxLength={20}
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="e.g. 0123456789"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Account Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    placeholder="Name on the bank account"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={subaccountLoading || !selectedBank || !accountNumber || !accountName}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 mt-2"
+                >
+                  {subaccountLoading
+                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Setting up payout account…</>
+                    : <>Continue → Verify Email</>
+                  }
+                </button>
+                <button type="button" onClick={() => { setSignupStep("info"); setAuthError(""); }} className="w-full text-gray-500 hover:text-gray-300 text-sm transition">
+                  ← Back
+                </button>
+              </form>
+            )}
+
+            {/* ── Step 3: OTP verification ── */}
+            {authMode === "signup" && signupStep === "otp" && (
+              <div className="relative z-10 space-y-4">
+                <div className="text-center">
+                  <div className="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <Mail className="w-7 h-7 text-blue-400" />
+                  </div>
+                  <p className="text-sm text-gray-400">We sent a 6-digit code to</p>
+                  <p className="text-sm font-bold text-white mt-0.5">{signupData?.email}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider text-center">Verification Code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={otpInput}
+                    onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "")); setOtpError(""); }}
+                    placeholder="••••••"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white text-center text-2xl font-bold tracking-[0.5em] outline-none focus:border-blue-500 transition placeholder:text-gray-700 placeholder:text-base placeholder:tracking-normal"
+                  />
+                  {otpError && (
+                    <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {otpError}</p>
+                  )}
+                </div>
+                <button
+                  onClick={handleVerifyOtp}
+                  disabled={otpLoading || otpInput.length !== 6}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2"
+                >
+                  {otpLoading
+                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Verifying…</>
+                    : <><CheckCircle2 className="w-4 h-4" /> Verify & Create Account</>
+                  }
+                </button>
+                <div className="text-center">
+                  <p className="text-xs text-gray-600">Didn't receive it?{" "}
+                    <button onClick={resendOtp} disabled={otpResending} className="text-blue-400 hover:text-blue-300 font-bold transition">
+                      {otpResending ? "Sending…" : "Resend code"}
+                    </button>
+                  </p>
                 </div>
               </div>
-
-              {authMode === "signup" && (
-                <>
-                  <div className="space-y-1">
-                    <div className="flex gap-1 h-1.5">
-                      {[1,2,3,4].map((n) => (
-                        <div key={n} className={`flex-1 rounded-full transition-colors ${passwordStrength >= n ? (n <= 1 ? "bg-red-500" : n <= 2 ? "bg-yellow-500" : n <= 3 ? "bg-blue-500" : "bg-green-500") : "bg-gray-800"}`} />
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      {passwordStrength === 0 ? "Enter a password" : passwordStrength === 1 ? "Weak — add uppercase & numbers" : passwordStrength === 2 ? "Fair — add symbols" : passwordStrength === 3 ? "Good" : "Strong ✓"}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Confirm Password</label>
-                    <input name="confirmPassword" type="password" required placeholder="••••••••" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition placeholder:text-gray-700" />
-                  </div>
-                </>
-              )}
-
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 mt-2">
-                <Lock className="w-4 h-4" /> {authMode === "login" ? "Sign In to Dashboard" : "Create Account"}
-              </button>
-            </form>
+            )}
 
             <div className="mt-6 text-center text-sm">
               <p className="text-gray-500">
                 {authMode === "login" ? "New organizer? " : "Already have an account? "}
-                <button onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); setPasswordStrength(0); }} className="text-blue-400 font-bold hover:text-blue-300 transition">
+                <button onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); setPasswordStrength(0); setSignupStep("info"); }} className="text-blue-400 font-bold hover:text-blue-300 transition">
                   {authMode === "login" ? "Create Account" : "Sign In"}
                 </button>
               </p>
@@ -952,9 +1234,13 @@ export default function HostPage() {
                           <td className="px-5 py-4">
                             {event.cancelled
                               ? <span className="bg-red-500/15 text-red-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><XCircle className="w-3 h-3" /> CANCELLED</span>
+                              : (event as OrganizerEvent & { status?: string }).status === "rejected"
+                              ? <span className="bg-red-500/15 text-red-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><XCircle className="w-3 h-3" /> REJECTED</span>
+                              : (!( event as OrganizerEvent & { status?: string }).status || (event as OrganizerEvent & { status?: string }).status === "pending")
+                              ? <span className="bg-yellow-500/15 text-yellow-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><Clock className="w-3 h-3" /> PENDING</span>
                               : isPast
                               ? <span className="bg-white/10 text-gray-500 text-xs font-bold px-2 py-1 rounded-full">ENDED</span>
-                              : <span className="bg-green-500/15 text-green-400 text-xs font-bold px-2 py-1 rounded-full">LIVE</span>
+                              : <span className="bg-green-500/15 text-green-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><CheckCircle2 className="w-3 h-3" /> LIVE</span>
                             }
                           </td>
                           <td className="px-5 py-4 text-right">

@@ -166,7 +166,7 @@ export default function HostPage() {
       const lowestPrice = ev.tickets?.length
         ? Math.min(...ev.tickets.map((t) => parseInt(t.price) || 0))
         : parseInt(ev.price?.replace(/[^0-9]/g, "") || "0");
-      totalRevenue += sold * lowestPrice;
+      totalRevenue += sold * lowestPrice * 0.95; // Net after 5% platform fee
       totalCapacity += ev.tickets?.reduce((acc, t) => acc + (parseInt(t.capacity) || 0), 0) ?? 0;
     });
 
@@ -266,7 +266,7 @@ export default function HostPage() {
     const lowestPrice = event.tickets?.length
       ? Math.min(...event.tickets.map((t) => parseInt(t.price) || 0))
       : parseInt(event.price?.replace(/[^0-9]/g, "") || "0");
-    return sold * lowestPrice;
+    return Math.round(sold * lowestPrice * 0.95); // Net after 5% platform fee
   };
 
   const getTotalCapacityForEvent = (event: OrganizerEvent) => {
@@ -701,7 +701,7 @@ export default function HostPage() {
                 <DollarSign className="w-3.5 h-3.5 text-green-400" /> Revenue
               </div>
               <div className="text-2xl font-bold">KES {stats.revenue.toLocaleString()}</div>
-              <p className="text-xs text-gray-600 mt-0.5">Lifetime earnings</p>
+              <p className="text-xs text-gray-600 mt-0.5">Net earnings (after 5% fee)</p>
             </div>
             <div className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:border-blue-500/30 transition">
               <div className="flex items-center gap-2 text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">
@@ -1072,10 +1072,10 @@ export default function HostPage() {
     attendees.forEach((a) => {
       if (!typeBreakdown[a.type]) typeBreakdown[a.type] = { sold: 0, revenue: 0, capacity: 0 };
       typeBreakdown[a.type].sold += a.quantity ?? 1;
-      typeBreakdown[a.type].revenue += a.price ?? 0;
+      typeBreakdown[a.type].revenue += (a.price ?? 0) * 0.95; // Net after 5% platform fee
     });
 
-    const totalRevenue = attendees.reduce((s, a) => s + (a.price ?? 0), 0);
+    const totalRevenue = Math.round(attendees.reduce((s, a) => s + (a.price ?? 0), 0) * 0.95); // Net after 5% platform fee
     const totalCap = (selectedEvent.tickets ?? []).reduce((s, t) => s + (parseInt(t.capacity) || 0), 0);
 
     const filtered = attendees.filter((a) => {
@@ -1130,8 +1130,9 @@ export default function HostPage() {
               {totalCap > 0 && <p className="text-xs text-gray-600 mt-0.5">of {totalCap} capacity</p>}
             </div>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><DollarSign className="w-3 h-3 text-green-400" />Revenue</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><DollarSign className="w-3 h-3 text-green-400" />Net Payout</p>
               <p className="text-2xl font-bold">KES {totalRevenue.toLocaleString()}</p>
+              <p className="text-xs text-gray-600 mt-0.5">After 5% platform fee</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><UserCheck className="w-3 h-3 text-purple-400" />Checked In</p>
@@ -1519,6 +1520,9 @@ export default function HostPage() {
                           <p className="font-bold text-sm truncate">{ticket.name}</p>
                           <p className="text-xs text-gray-500 mt-0.5">
                             KES {parseInt(ticket.price || "0").toLocaleString()}
+                            {parseInt(ticket.price || "0") > 0 && (
+                              <span className="ml-1.5 text-green-500/70">→ you get KES {Math.round(parseInt(ticket.price) * 0.95).toLocaleString()}</span>
+                            )}
                             {ticket.capacity && <span className="ml-2 text-gray-600">· {ticket.capacity} seats</span>}
                           </p>
                         </div>
@@ -1529,6 +1533,25 @@ export default function HostPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Platform fee notice */}
+                {tickets.length > 0 && (
+                  <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 flex items-start gap-3">
+                    <Percent className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-blue-300 mb-0.5">Platform Fee</p>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        NeneTickets charges a <strong className="text-gray-300">5% platform fee</strong> per ticket sold. You receive <strong className="text-gray-300">95% of ticket sales</strong>.
+                        {tickets.length > 0 && (() => {
+                          const lowestPrice = Math.min(...tickets.map(t => parseInt(t.price) || 0));
+                          return lowestPrice > 0 ? (
+                            <span className="block mt-1 text-blue-400/70">e.g. KES {lowestPrice.toLocaleString()} ticket → you receive KES {Math.round(lowestPrice * 0.95).toLocaleString()}</span>
+                          ) : null;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   onClick={handlePublish}

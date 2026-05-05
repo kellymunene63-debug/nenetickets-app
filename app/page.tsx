@@ -42,14 +42,14 @@ async function redisGet<T>(key: string): Promise<T | null> {
 async function fetchTrendingEvents(): Promise<TrendingEvent[]> {
   try {
     const raw = await redisGet<Array<{
-      id: string; title: string; date: string; location: string;
-      price: string; image: string; category: string; aiTag?: string;
-      createdAt?: string; cancelled?: boolean;
-    }>>("nene:events");
+  id: string; title: string; date: string; location: string;
+  price: string; image: string; category: string; aiTag?: string;
+  createdAt?: string; cancelled?: boolean; status?: string;
+}>>("nene:events");
     if (!raw) return [];
 
     return raw
-      .filter((e) => !e.cancelled)
+  .filter((e) => !e.cancelled && e.status === "approved")
       .sort((a, b) =>
         new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
       )

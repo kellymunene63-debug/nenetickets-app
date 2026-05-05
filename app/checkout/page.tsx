@@ -76,7 +76,10 @@ function CheckoutContent() {
   const eventId  = params.get("eventId")  ?? "";
 
   // Restore base64 image from sessionStorage if it was too large for the URL
-  const image = params.get("image") ?? "";
+  const rawImage = params.get("image") ?? "";
+  const image = rawImage === "__session__"
+    ? (typeof window !== "undefined" ? sessionStorage.getItem("nene_checkout_image") ?? "" : "")
+    : rawImage;
 
   const total      = price * quantity;
   const serviceFee = Math.round(total * 0.03);
@@ -446,9 +449,9 @@ function CheckoutContent() {
             </div>
             <div className="flex justify-between text-gray-500">
               <span className="flex items-center gap-1.5">
-                Service fee (3%)
+                Booking fee (3%)
                 <span
-                  title="Covers payment processing and platform operating costs. This fee is non-refundable."
+                  title="A 3% booking fee is charged to cover payment processing. This fee is non-refundable."
                   className="cursor-help text-gray-600 hover:text-gray-400 transition"
                 >
                   <Info className="w-3.5 h-3.5" />
@@ -509,7 +512,7 @@ function CheckoutContent() {
                 <AlertCircle className="w-3.5 h-3.5" /> Refund Policy
               </p>
               <p className="text-xs text-gray-500 leading-relaxed">
-                Tickets are <strong className="text-gray-400">non-refundable</strong> once purchased, except if the event is officially cancelled by the organiser — in which case you are entitled to a full ticket refund within 7–14 business days. The 3% service fee is non-refundable in all cases. Questions?{" "}
+                Tickets are <strong className="text-gray-400">non-refundable</strong> once purchased, except if the event is officially cancelled by the organiser — in which case you are entitled to a full ticket refund within 7–14 business days. The 3% booking fee is non-refundable in all cases. Questions?{" "}
                 <a href="mailto:support@nenetickets.co.ke" className="text-blue-400 hover:underline">support@nenetickets.co.ke</a>
               </p>
             </div>

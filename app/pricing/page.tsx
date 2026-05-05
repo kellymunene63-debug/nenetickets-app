@@ -7,6 +7,7 @@ import {
   Clock, Banknote, Ticket, TrendingUp, Users, Star,
   ChevronDown, ChevronUp, AlertCircle, Gift,
 } from "lucide-react";
+import Navbar from "@/components/Navbar";
 
 const faqs = [
   {
@@ -62,27 +63,7 @@ export default function PricingPage() {
     <main className="min-h-screen bg-[#050511] text-white">
 
       {/* ── Nav ─────────────────────────────────────────────────────── */}
-      <nav className="border-b border-white/10 bg-black/40 backdrop-blur sticky top-0 z-20">
-        <div className="container mx-auto px-4 py-4 max-w-6xl flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Ticket className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg">NeneTickets</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm text-gray-400 hover:text-white transition hidden sm:block">
-              Browse Events
-            </Link>
-            <Link
-              href="/host"
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition"
-            >
-              Start Selling
-            </Link>
-          </div>
-        </div>
-      </nav>
+<Navbar />
 
       {/* ── Hero ────────────────────────────────────────────────────── */}
       <section className="container mx-auto px-4 pt-20 pb-12 max-w-4xl text-center">

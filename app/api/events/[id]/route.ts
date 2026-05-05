@@ -107,6 +107,25 @@ export async function PATCH(req: Request, { params }: Params) {
 
     events[idx] = { ...events[idx], ...updates, id: params.id };
     await redisSet(KEY, events);
+    
+    // Send status email to organizer
+const updated = events[idx];
+if (
+  (updates.status === "approved" || updates.status === "rejected") &&
+  updated.organizerEmail
+) {
+  await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? "https://nenetickets.co.ke"}/api/email/event-status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email:         updated.organizerEmail,
+      organizerName: updated.organizerName ?? "Organizer",
+      eventTitle:    updated.title,
+      status:        updates.status,
+      rejectReason:  updates.rejectReason ?? "",
+    }),
+  });
+}
     return NextResponse.json({ success: true, event: events[idx] });
   } catch (err) {
     console.error("PATCH /api/events/[id]:", err);

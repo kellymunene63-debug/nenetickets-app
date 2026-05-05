@@ -61,13 +61,13 @@ async function fetchHostedEvents(): Promise<Event[]> {
     if (!Array.isArray(parsed)) return [];
 
     const raw = parsed as Array<{
-      id: string; title: string; date: string; location: string;
-      price: string; image: string; category: string; aiTag?: string;
-      createdAt?: string; cancelled?: boolean;
-    }>;
+  id: string; title: string; date: string; location: string;
+  price: string; image: string; category: string; aiTag?: string;
+  createdAt?: string; cancelled?: boolean; status?: string;
+}>;
 
     return raw
-      .filter((e) => !e.cancelled)
+  .filter((e) => !e.cancelled && e.status === "approved")
       // Most recently created events appear first
       .sort((a, b) =>
         new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()

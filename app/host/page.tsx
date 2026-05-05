@@ -919,7 +919,7 @@ export default function HostPage() {
                   }
                 </button>
                 <div className="text-center">
-                  <p className="text-xs text-gray-600">Didn't receive it?{" "}
+                  <p className="text-xs text-gray-600">Didn&apos;t receive it?{" "}
                     <button onClick={resendOtp} disabled={otpResending} className="text-blue-400 hover:text-blue-300 font-bold transition">
                       {otpResending ? "Sending…" : "Resend code"}
                     </button>

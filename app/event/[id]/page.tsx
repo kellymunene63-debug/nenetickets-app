@@ -53,8 +53,13 @@ async function redisGet<T>(key: string): Promise<T | null> {
     });
     clearTimeout(timer);
 
-    const json = await res.json() as { result: string | null };
-    return json.result ? (JSON.parse(json.result) as T) : null;
+    const json = await res.json() as { result: unknown };
+    if (json.result === null || json.result === undefined) return null;
+
+    let data: unknown = json.result;
+    if (typeof data === "string") data = JSON.parse(data);
+    if (typeof data === "string") data = JSON.parse(data);
+    return data as T;
   } catch {
     return null;
   }

@@ -124,6 +124,7 @@ export default function HostPage() {
   const [imageUploading, setImageUploading] = useState(false);
   const [newPromo, setNewPromo] = useState({ code: "", discount: "", type: "percent" as "percent" | "fixed", description: "" });
   const [promoSaved, setPromoSaved] = useState(false);
+  const [refunds, setRefunds] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -146,6 +147,8 @@ export default function HostPage() {
     }
 
     const allSold: any[] = JSON.parse(localStorage.getItem("nene_sold_tickets") || "[]");
+    const storedRefunds = JSON.parse(localStorage.getItem("nene_refunds") || "{}");
+    setRefunds(storedRefunds);
 
     // Only show this organizer's events
     const mine = allEvents.filter(
@@ -327,6 +330,26 @@ export default function HostPage() {
     } catch {
       alert("Could not restore the event. Please try again.");
     }
+  };
+
+  const toggleRefund = (ticketId: string) => {
+    const updated = { ...refunds, [ticketId]: !refunds[ticketId] };
+    setRefunds(updated);
+    localStorage.setItem("nene_refunds", JSON.stringify(updated));
+  };
+
+  const handleNotifyWhatsApp = (event: OrganizerEvent) => {
+    const holders = getAttendeesForEvent(event.title).filter((a) => a.phone);
+    if (!holders.length) {
+      alert("No ticket holders have a phone number on record.");
+      return;
+    }
+    const message = `Hello! We regret to inform you that *${event.title}* scheduled for ${event.date} has been cancelled.${event.cancelReason ? `\n\nReason: ${event.cancelReason}` : ""}\n\nYour refund will be processed within 7 business days. We sincerely apologise for the inconvenience.\n\n— NeneTickets`;
+    holders.forEach((a, i) => {
+      const raw = (a.phone || "").replace(/\D/g, "");
+      const phone = raw.startsWith("0") ? `254${raw.slice(1)}` : raw.startsWith("254") ? raw : `254${raw}`;
+      setTimeout(() => window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank"), i * 700);
+    });
   };
 
   const startEditEvent = (event: OrganizerEvent) => {
@@ -1122,8 +1145,55 @@ export default function HostPage() {
             </div>
           </div>
 
-          {/* Check-in progress bar */}
-          {attendees.length > 0 && (
+          {/* Cancellation action panel */}
+          {selectedEvent.cancelled && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-5 mb-8">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <XCircle className="w-5 h-5 text-red-400" />
+                    <span className="font-bold text-red-300">Event Cancelled</span>
+                  </div>
+                  {selectedEvent.cancelReason && (
+                    <p className="text-sm text-red-400/70 ml-7">Reason: {selectedEvent.cancelReason}</p>
+                  )}
+                </div>
+                {attendees.filter((a) => a.phone).length > 0 && (
+                  <button
+                    onClick={() => handleNotifyWhatsApp(selectedEvent)}
+                    className="flex items-center gap-2 text-sm font-bold bg-green-600/15 hover:bg-green-600/25 border border-green-600/25 text-green-400 px-4 py-2.5 rounded-xl transition flex-shrink-0"
+                  >
+                    <Phone className="w-4 h-4" />
+                    Notify via WhatsApp ({attendees.filter((a) => a.phone).length})
+                  </button>
+                )}
+              </div>
+              {attendees.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-red-500/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-red-300 flex items-center gap-2">
+                      <DollarSign className="w-4 h-4" /> Refund Progress
+                    </span>
+                    <span className="text-sm font-bold text-orange-400">
+                      {attendees.filter((a) => refunds[a.id]).length} / {attendees.length} refunded
+                    </span>
+                  </div>
+                  <div className="w-full bg-white/5 rounded-full h-2.5">
+                    <div
+                      className="h-2.5 rounded-full bg-gradient-to-r from-orange-600 to-orange-400 transition-all duration-700"
+                      style={{ width: `${attendees.length > 0 ? Math.round((attendees.filter((a) => refunds[a.id]).length / attendees.length) * 100) : 0}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-orange-400/60 mt-1.5">
+                    KES {attendees.filter((a) => refunds[a.id]).reduce((s, a) => s + (a.price ?? 0), 0).toLocaleString()} of KES {totalRevenue.toLocaleString()} refunded
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Check-in progress bar — only for active events */}
+          {!selectedEvent.cancelled && attendees.length > 0 && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-8">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-bold flex items-center gap-2"><UserCheck className="w-4 h-4 text-purple-400" />Check-in Progress</span>
@@ -1212,6 +1282,11 @@ export default function HostPage() {
                           <CheckCheck className="w-3 h-3" /> Checked In
                         </span>
                       )}
+                      {refunds[attendee.id] && (
+                        <span className="text-orange-400 text-xs font-bold bg-orange-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <DollarSign className="w-3 h-3" /> Refunded
+                        </span>
+                      )}
                     </div>
                     <p className="font-mono text-xs text-gray-500 mb-2">#{attendee.id}</p>
                     <div className="flex flex-wrap gap-4 text-xs text-gray-400">
@@ -1239,24 +1314,51 @@ export default function HostPage() {
                     )}
                   </div>
 
-                  {/* Right: purchase time + check-in button */}
+                  {/* Right: purchase time + action buttons */}
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
                     <p className="text-xs text-gray-600">
                       {new Date(attendee.purchasedAt).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}
                     </p>
-                    <button
-                      onClick={() => toggleCheckIn(attendee.id)}
-                      className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition ${
-                        attendee.checkedIn
-                          ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30"
-                          : "bg-white/5 text-gray-400 border border-white/10 hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/30"
-                      }`}
-                    >
-                      {attendee.checkedIn
-                        ? <><XCircle className="w-3.5 h-3.5" /> Undo Check-in</>
-                        : <><CheckCheck className="w-3.5 h-3.5" /> Check In</>
-                      }
-                    </button>
+                    {selectedEvent.cancelled ? (
+                      <>
+                        {attendee.phone && (
+                          <a
+                            href={`https://wa.me/${((attendee.phone.replace(/\D/g, "")).startsWith("0") ? `254${attendee.phone.replace(/\D/g, "").slice(1)}` : attendee.phone.replace(/\D/g, "").startsWith("254") ? attendee.phone.replace(/\D/g, "") : `254${attendee.phone.replace(/\D/g, "")}`)}?text=${encodeURIComponent(`Hello! *${selectedEvent.title}* has been cancelled. Your refund of KES ${(attendee.price ?? 0).toLocaleString()} will be processed within 7 business days.\n\n— NeneTickets`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <button className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-green-600/15 text-green-400 border border-green-600/25 hover:bg-green-600/25 transition">
+                              <Phone className="w-3.5 h-3.5" /> WhatsApp
+                            </button>
+                          </a>
+                        )}
+                        <button
+                          onClick={() => toggleRefund(attendee.id)}
+                          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition ${
+                            refunds[attendee.id]
+                              ? "bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-white/5 hover:text-gray-400 hover:border-white/10"
+                              : "bg-white/5 text-gray-400 border border-white/10 hover:bg-orange-500/20 hover:text-orange-400 hover:border-orange-500/30"
+                          }`}
+                        >
+                          <DollarSign className="w-3.5 h-3.5" />
+                          {refunds[attendee.id] ? "Refunded ✓" : "Mark Refunded"}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => toggleCheckIn(attendee.id)}
+                        className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition ${
+                          attendee.checkedIn
+                            ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30"
+                            : "bg-white/5 text-gray-400 border border-white/10 hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/30"
+                        }`}
+                      >
+                        {attendee.checkedIn
+                          ? <><XCircle className="w-3.5 h-3.5" /> Undo Check-in</>
+                          : <><CheckCheck className="w-3.5 h-3.5" /> Check In</>
+                        }
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

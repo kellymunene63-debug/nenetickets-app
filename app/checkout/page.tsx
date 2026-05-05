@@ -21,6 +21,9 @@ declare global {
         currency: string;
         ref: string;
         metadata?: Record<string, unknown>;
+        subaccount?: string;          // organizer's Paystack subaccount code
+        transaction_charge?: number;  // Kelly's cut in kobo (stays in main account)
+        bearer?: "account" | "subaccount";
         onClose: () => void;
         callback: (response: { reference: string }) => void;
       }) => { openIframe: () => void };
@@ -104,6 +107,7 @@ function CheckoutContent() {
   const [paystackLoaded, setPaystackLoaded] = useState(false);
   const [confirmedRef, setConfirmedRef] = useState("");
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
+  const [subaccountCode, setSubaccountCode] = useState<string>("");
 
   // Build WhatsApp message and URL
   const buildWhatsAppMessage = (id: string) =>
@@ -132,6 +136,17 @@ function CheckoutContent() {
     script.onload = () => setPaystackLoaded(true);
     document.body.appendChild(script);
   }, []);
+
+  // Fetch the organizer's subaccount code from the event record
+  useEffect(() => {
+    if (!eventId) return;
+    fetch(`/api/events/${eventId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((ev: { subaccount_code?: string } | null) => {
+        if (ev?.subaccount_code) setSubaccountCode(ev.subaccount_code);
+      })
+      .catch(() => {}); // non-blocking — payment still works without split
+  }, [eventId]);
 
   const applyPromo = () => {
     const code = promoInput.trim().toUpperCase();
@@ -272,6 +287,18 @@ function CheckoutContent() {
       return;
     }
 
+    // ── Split payment calculation ─────────────────────────────────────────────
+    // Buyer pays grandTotal (ticket price + 3% booking fee - any discount).
+    // Organizer receives 95% of the net ticket amount; Kelly keeps the rest.
+    // transaction_charge = amount that stays in Kelly's main Paystack account (kobo).
+    const ticketNet        = total - discountAmount;           // ticket revenue after promo
+    const organizerKobo    = Math.round(ticketNet * 0.95 * 100); // 95% → organizer (kobo)
+    const transactionKobo  = grandTotal * 100 - organizerKobo;   // Kelly's cut (kobo)
+
+    const splitOptions = subaccountCode
+      ? { subaccount: subaccountCode, transaction_charge: transactionKobo, bearer: "account" as const }
+      : {};
+
     const handler = window.PaystackPop.setup({
       key: publicKey,
       email,
@@ -280,7 +307,11 @@ function CheckoutContent() {
       ref: `NENE-${ticketId}-${Date.now()}`,
       metadata: {
         title, type, quantity, date, location, promoCode, eventId,
+        organizer_amount_kes: Math.round(ticketNet * 0.95),
+        platform_fee_kes:     Math.round(ticketNet * 0.05),
+        booking_fee_kes:      Math.round(total * 0.03),
       },
+      ...splitOptions,
       onClose: () => {
         // user closed the popup without paying — do nothing
       },

@@ -154,7 +154,8 @@ async function renderEventPage(id: string) {
   }
 
   // ── Hosted events: fetch from Redis ──────────────────────────────────────
-  const allHosted = await redisGet<RawEvent[]>("nene:events") ?? [];
+  const rawHosted = await redisGet<unknown>("nene:events");
+const allHosted: RawEvent[] = Array.isArray(rawHosted) ? rawHosted : [];
   const hostedRaw = allHosted.find((e) => e.id === id) ?? null;
 
   if (!hostedRaw) return <NotFound />;

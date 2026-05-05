@@ -7,7 +7,7 @@ import {
   Clock, Banknote, Ticket, TrendingUp, Users, Star,
   ChevronDown, ChevronUp, AlertCircle, Gift,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
+import Navbar from "@/components/shared/Navbar";
 
 const faqs = [
   {

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-// Node.js runtime — higher body-size limit than edge; no silent truncation
 export const dynamic = "force-dynamic";
 
 const KEY = "nene:events";
+
+type StoredEvent = Record<string, unknown>;
 
 // ── Redis helpers ─────────────────────────────────────────────────────────────
 
@@ -21,30 +22,30 @@ async function redisGet<T>(key: string): Promise<T | null> {
   return json.result ? (JSON.parse(json.result) as T) : null;
 }
 
-// Direct SET endpoint — reliable for large values; throws on failure so the
-// caller knows the write didn't happen (unlike the old silent pipeline).
+// Uses the pipeline endpoint so the value is passed as a plain string argument —
+// avoids the double-encoding bug of the direct /set/{key} body approach.
 async function redisSet(key: string, value: unknown): Promise<void> {
   const url   = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) throw new Error("Redis env vars not configured");
 
-  const serialised = JSON.stringify(value);
-  const res = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+  const res = await fetch(`${url}/pipeline`, {
     method:  "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body:    JSON.stringify(serialised),
+    body:    JSON.stringify([["SET", key, JSON.stringify(value)]]),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Redis SET failed: ${res.status} ${text}`);
   }
+
+  const result = await res.json() as Array<{ result: unknown; error?: string }>;
+  if (result[0]?.error) {
+    throw new Error(`Redis SET error: ${result[0].error}`);
+  }
 }
 
-// Replace base64 images with empty string so the stored payload stays small.
-// The event detail page always fetches the full image from ImgBB — the base64
-// in the events list is only needed during the upload flow, not for storage.
-type StoredEvent = Record<string, unknown>;
 function stripBase64(e: StoredEvent): StoredEvent {
   const img = e.image as string | undefined;
   return img?.startsWith("data:") ? { ...e, image: "" } : e;
@@ -66,11 +67,10 @@ export async function POST(req: Request) {
   try {
     const event = await req.json() as StoredEvent;
 
-    // Strip base64 from new event and all existing events to keep payload lean
     const cleanNew = stripBase64(event);
     const existing = (await redisGet<StoredEvent[]>(KEY) ?? []).map(stripBase64);
 
-    await redisSet(KEY, [cleanNew, ...existing]); // newest first
+    await redisSet(KEY, [cleanNew, ...existing]);
 
     return NextResponse.json({ success: true, event: cleanNew });
   } catch (err) {

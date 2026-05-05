@@ -23,7 +23,7 @@ export async function POST(req: Request) {
         business_name:         body.business_name,
         settlement_bank:       body.settlement_bank,
         account_number:        body.account_number,
-        percentage_charge:     95,
+        percentage_charge:     5,
         primary_contact_email: body.primary_contact_email,
         primary_contact_name:  body.primary_contact_name,
         primary_contact_phone: body.primary_contact_phone ?? "",

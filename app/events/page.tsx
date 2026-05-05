@@ -52,10 +52,15 @@ async function fetchHostedEvents(): Promise<Event[]> {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store", // always fetch fresh — events must appear immediately after creation
     });
-    const json = await res.json() as { result: string | null };
+    const json = await res.json() as { result: unknown };
     if (!json.result) return [];
 
-    const raw = JSON.parse(json.result) as Array<{
+    let parsed: unknown = json.result;
+    if (typeof parsed === "string") parsed = JSON.parse(parsed);
+    if (typeof parsed === "string") parsed = JSON.parse(parsed);
+    if (!Array.isArray(parsed)) return [];
+
+    const raw = parsed as Array<{
       id: string; title: string; date: string; location: string;
       price: string; image: string; category: string; aiTag?: string;
       createdAt?: string; cancelled?: boolean;

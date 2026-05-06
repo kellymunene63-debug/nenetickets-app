@@ -747,8 +747,17 @@ const handlePublishAfterPayment = async () => {
   };
 
   const handlePublish = async () => {
-    if (!formData.title || !formData.date || !formData.location) return;
-    setIsLoading(true);
+  if (!formData.title || !formData.date || !formData.location) return;
+
+  // Intercept free events — charge KES 5,000 listing fee first
+  const isFreeEvent = tickets.every((t) => !t.price || parseInt(t.price) === 0);
+  if (isFreeEvent && !editingEvent) {
+    setPendingFreeEvent(formData);
+    setListingFeeModal(true);
+    return;
+  }
+
+  setIsLoading(true);
 
     const lowestPrice = tickets.length > 0
       ? Math.min(...tickets.map((t) => parseInt(t.price) || 0))

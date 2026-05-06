@@ -750,7 +750,7 @@ const handlePublishAfterPayment = async () => {
   if (!formData.title || !formData.date || !formData.location) return;
 
   // Intercept free events — charge KES 5,000 listing fee first
-  const isFreeEvent = tickets.every((t) => !t.price || parseInt(t.price) === 0);
+  const isFreeEvent = tickets.every((t) => !t.price || parseInt(t.price || "0") === 0);
   if (isFreeEvent && !editingEvent) {
     setPendingFreeEvent(formData);
     setListingFeeModal(true);

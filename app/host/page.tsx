@@ -36,6 +36,9 @@ interface OrganizerEvent {
   cancelled?: boolean;
   cancelReason?: string;
   cancelledAt?: string | null;
+  status?: "pending" | "approved" | "rejected";
+  rejectReason?: string;
+  appealReason?: string;
 }
 
 interface Host {
@@ -115,6 +118,10 @@ export default function HostPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  const [appealModal, setAppealModal] = useState<string | null>(null);
+const [appealReason, setAppealReason] = useState("");
+const [appealLoading, setAppealLoading] = useState(false);
+const [appealSuccess, setAppealSuccess] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [editingEvent, setEditingEvent] = useState<OrganizerEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<OrganizerEvent | null>(null);
@@ -476,6 +483,39 @@ export default function HostPage() {
     }
   };
 
+const handleAppeal = async (eventId: string) => {
+  if (!appealReason.trim()) return;
+  setAppealLoading(true);
+  try {
+    await fetch(`/api/events/${eventId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "pending",
+        appealReason: appealReason.trim(),
+        rejectReason: "",
+      }),
+    });
+    setMyEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId
+          ? { ...e, status: "pending", appealReason: appealReason.trim() }
+          : e
+      )
+    );
+    setAppealSuccess(true);
+    setTimeout(() => {
+      setAppealModal(null);
+      setAppealReason("");
+      setAppealSuccess(false);
+    }, 2000);
+  } catch {
+    alert("Could not submit appeal. Please try again.");
+  } finally {
+    setAppealLoading(false);
+  }
+};
+  
   const toggleRefund = (ticketId: string) => {
     const updated = { ...refunds, [ticketId]: !refunds[ticketId] };
     setRefunds(updated);
@@ -1267,6 +1307,16 @@ export default function HostPage() {
                                 <button onClick={() => startEditEvent(event)} className="text-gray-600 hover:text-yellow-400 transition p-1.5 rounded-lg hover:bg-yellow-500/10" title="Edit event">
                                   <Edit2 className="w-4 h-4" />
                                 </button>
+                                {/* Appeal button — only for rejected events */}
+{(event as OrganizerEvent & { status?: string }).status === "rejected" && (
+  <button
+    onClick={() => { setAppealModal(event.id); setAppealReason(""); setAppealSuccess(false); }}
+    className="text-gray-600 hover:text-blue-400 transition p-1.5 rounded-lg hover:bg-blue-500/10"
+    title="Appeal rejection"
+  >
+    <FileText className="w-4 h-4" />
+  </button>
+)}
                                 {event.cancelled ? (
                                   <button onClick={() => handleRestoreEvent(event.id)} className="text-gray-600 hover:text-green-400 transition p-1.5 rounded-lg hover:bg-green-500/10" title="Restore event">
                                     <CheckCircle2 className="w-4 h-4" />
@@ -1341,6 +1391,56 @@ export default function HostPage() {
             </div>
           </div>
         )}
+
+        {/* ── Appeal Modal ── */}
+{appealModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+      {appealSuccess ? (
+        <div className="text-center py-6">
+          <div className="w-16 h-16 bg-green-500/20 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-8 h-8 text-green-400" />
+          </div>
+          <h3 className="font-bold text-lg text-white mb-2">Appeal Submitted!</h3>
+          <p className="text-gray-400 text-sm">Your event has been resubmitted for review. We will notify you via email once a decision is made.</p>
+        </div>
+      ) : (
+        <>
+          <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-400" /> Appeal Rejection
+          </h3>
+          <p className="text-gray-400 text-sm mb-4">Explain why you believe your event should be approved. Our team will review your appeal and respond via email.</p>
+          {myEvents.find((e) => e.id === appealModal)?.rejectReason && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
+              <p className="text-xs font-bold text-red-400 mb-1">Rejection reason:</p>
+              <p className="text-xs text-red-300/70">{myEvents.find((e) => e.id === appealModal)?.rejectReason}</p>
+            </div>
+          )}
+          <div className="mb-4">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Your Appeal <span className="text-red-400">*</span></label>
+            <textarea
+              value={appealReason}
+              onChange={(e) => setAppealReason(e.target.value)}
+              placeholder="e.g. We have updated the event details, secured the venue permit, and ensured all safety requirements are met…"
+              rows={4}
+              className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500 transition resize-none placeholder:text-gray-700"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => { setAppealModal(null); setAppealReason(""); }} className="flex-1 border border-white/10 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/5 transition text-sm">Cancel</button>
+            <button
+              onClick={() => handleAppeal(appealModal)}
+              disabled={appealLoading || !appealReason.trim()}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center gap-2"
+            >
+              {appealLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Submitting…</> : <><FileText className="w-4 h-4" /> Submit Appeal</>}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
       </main>
     );
   }

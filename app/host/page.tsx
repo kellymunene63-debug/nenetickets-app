@@ -555,7 +555,7 @@ const handleAppeal = async (eventId: string) => {
     email: listingFeeEmail,
     amount: 5000 * 100, // KES 5,000 in kobo
     currency: "KES",
-    ref,
+    ref: ref,
     onClose: () => setListingFeePaying(false),
     callback: (response) => {
   // Verify payment

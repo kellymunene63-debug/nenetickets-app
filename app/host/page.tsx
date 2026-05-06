@@ -578,19 +578,6 @@ const handleAppeal = async (eventId: string) => {
       setListingFeePaying(false);
     });
 },
-        }
-        // Payment confirmed — close modal and publish event
-        setListingFeeModal(false);
-        setListingFeePaying(false);
-        setListingFeeEmail("");
-        setIsLoading(true);
-        await handlePublishAfterPayment();
-      } catch {
-        setListingFeeError("Verification failed. Contact support if money was deducted.");
-        setListingFeePaying(false);
-      }
-    },
-  });
 
   handler.openIframe();
 };

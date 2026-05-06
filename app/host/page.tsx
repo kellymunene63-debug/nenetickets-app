@@ -2236,5 +2236,79 @@ const handlePublishAfterPayment = async () => {
         </div>
       </div>
     </main>
+  {/* ── Listing Fee Modal ── */}
+      {listingFeeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-green-600/20 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <Ticket className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="font-bold text-lg text-white">Free Event Listing Fee</h3>
+              <p className="text-gray-400 text-sm mt-1">A one-time fee applies before your event goes live</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-5 space-y-3 text-sm">
+              <div className="flex justify-between text-gray-400">
+                <span>Listing fee (free events)</span>
+                <span className="font-bold text-white">KES 5,000</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Per-ticket fee</span>
+                <span className="text-green-400 font-bold">None</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Booking fee for attendees</span>
+                <span className="text-green-400 font-bold">None</span>
+              </div>
+              <div className="border-t border-white/10 pt-3 flex justify-between">
+                <span className="font-bold">Total due now</span>
+                <span className="text-xl font-bold text-blue-400">KES 5,000</span>
+              </div>
+            </div>
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-5">
+              <p className="text-xs text-amber-300/80 leading-relaxed">
+                <strong className="text-amber-300">Why this fee?</strong> Free events generate no ticket revenue, so the KES 5,000 flat fee covers platform costs, event listing, and QR check-in infrastructure.
+              </p>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Email for payment receipt</label>
+              <input
+                type="email"
+                value={listingFeeEmail}
+                onChange={(e) => { setListingFeeEmail(e.target.value); setListingFeeEmailError(""); }}
+                placeholder="you@example.com"
+                className={`w-full bg-black/50 border rounded-xl p-3 text-white text-sm outline-none transition placeholder:text-gray-700 ${listingFeeEmailError ? "border-red-500" : "border-white/10 focus:border-blue-500"}`}
+              />
+              {listingFeeEmailError && (
+                <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {listingFeeEmailError}</p>
+              )}
+            </div>
+            {listingFeeError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
+                <p className="text-xs text-red-400 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> {listingFeeError}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setListingFeeModal(false); setListingFeeEmail(""); setListingFeeError(""); }}
+                className="flex-1 border border-white/10 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/5 transition text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleListingFeePayment}
+                disabled={listingFeePaying || !paystackLoaded}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center gap-2"
+              >
+                {listingFeePaying
+                  ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
+                  : <><CreditCard className="w-4 h-4" /> Pay KES 5,000</>
+                }
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 text-center mt-3">Secured by Paystack · M-Pesa, Visa, Mastercard accepted</p>
+          </div>
+        </div>
+      )}
   );
 }

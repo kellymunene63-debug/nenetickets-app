@@ -573,11 +573,11 @@ const handleAppeal = async (eventId: string) => {
       setIsLoading(true);
       handlePublishAfterPayment();
     })
-    .catch(() => {
-      setListingFeeError("Verification failed. Contact support if money was deducted.");
-      setListingFeePaying(false);
-    });
-},
+          .catch(() => {
+            setListingFeeError("Verification failed. Contact support if money was deducted.");
+            setListingFeePaying(false);
+          });
+        },
 
   handler.openIframe();
 };

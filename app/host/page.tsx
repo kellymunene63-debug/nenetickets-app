@@ -2235,8 +2235,8 @@ const handlePublishAfterPayment = async () => {
           </div>
         </div>
       </div>
-    </main>
-  {/* ── Listing Fee Modal ── */}
+
+      {/* ── Listing Fee Modal ── */}
       {listingFeeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -2310,5 +2310,6 @@ const handlePublishAfterPayment = async () => {
           </div>
         </div>
       )}
+    </main>
   );
 }

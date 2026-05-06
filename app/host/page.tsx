@@ -557,15 +557,27 @@ const handleAppeal = async (eventId: string) => {
     currency: "KES",
     ref,
     onClose: () => setListingFeePaying(false),
-    callback: async (response) => {
-      // Verify payment
-      try {
-        const res = await fetch(`/api/paystack/verify/${response.reference}`);
-        const data = await res.json() as { paid: boolean };
-        if (!data.paid) {
-          setListingFeeError("Payment could not be verified. Please try again.");
-          setListingFeePaying(false);
-          return;
+    callback: (response) => {
+  // Verify payment
+  fetch(`/api/paystack/verify/${response.reference}`)
+    .then((res) => res.json())
+    .then((data: { paid: boolean }) => {
+      if (!data.paid) {
+        setListingFeeError("Payment could not be verified. Please try again.");
+        setListingFeePaying(false);
+        return;
+      }
+      setListingFeeModal(false);
+      setListingFeePaying(false);
+      setListingFeeEmail("");
+      setIsLoading(true);
+      handlePublishAfterPayment();
+    })
+    .catch(() => {
+      setListingFeeError("Verification failed. Contact support if money was deducted.");
+      setListingFeePaying(false);
+    });
+},
         }
         // Payment confirmed — close modal and publish event
         setListingFeeModal(false);

@@ -553,31 +553,31 @@ const handleAppeal = async (eventId: string) => {
   const handler = window.PaystackPop.setup({
     key: publicKey,
     email: listingFeeEmail,
-    amount: 5000 * 100, // KES 5,000 in kobo
+    amount: 5000 * 100,
     currency: "KES",
     ref: ref,
     onClose: () => setListingFeePaying(false),
     callback: (response) => {
-  // Verify payment
-  fetch(`/api/paystack/verify/${response.reference}`)
-    .then((res) => res.json())
-    .then((data: { paid: boolean }) => {
-      if (!data.paid) {
-        setListingFeeError("Payment could not be verified. Please try again.");
-        setListingFeePaying(false);
-        return;
-      }
-      setListingFeeModal(false);
-      setListingFeePaying(false);
-      setListingFeeEmail("");
-      setIsLoading(true);
-      handlePublishAfterPayment();
-    })
+      fetch(`/api/paystack/verify/${response.reference}`)
+        .then((res) => res.json())
+        .then((data: { paid: boolean }) => {
+          if (!data.paid) {
+            setListingFeeError("Payment could not be verified. Please try again.");
+            setListingFeePaying(false);
+            return;
+          }
+          setListingFeeModal(false);
+          setListingFeePaying(false);
+          setListingFeeEmail("");
+          setIsLoading(true);
+          handlePublishAfterPayment();
+        })
         .catch(() => {
           setListingFeeError("Verification failed. Contact support if money was deducted.");
           setListingFeePaying(false);
         });
-      },
+    },
+  });
 
   handler.openIframe();
 };

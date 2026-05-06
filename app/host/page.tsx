@@ -5,14 +5,24 @@ import Navbar from "../../components/shared/Navbar";
 import {
   Upload, CheckCircle2, DollarSign, Sparkles, Plus, Trash2, Tag,
   BarChart3, Users, ArrowLeft, LogOut, Eye, EyeOff, Lock,
-  ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar,
+  ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar, CreditCard,
   ExternalLink, Edit2, MapPin, FileText, Hash, ChevronDown,
   Download, Search, CheckCheck, Clock, Phone, Mail, UserCheck, XCircle, PieChart,
   ToggleLeft, ToggleRight, Percent, BadgeDollarSign
 } from "lucide-react";
 import Link from "next/link";
 import { uploadImage } from "../../libs/uploadImage";
-
+declare global {
+  interface Window {
+    PaystackPop: {
+      setup: (options: {
+        key: string; email: string; amount: number; currency: string;
+        ref: string; onClose: () => void;
+        callback: (response: { reference: string }) => void;
+      }) => { openIframe: () => void };
+    };
+  }
+}
 interface TicketType {
   name: string;
   price: string;
@@ -122,6 +132,13 @@ export default function HostPage() {
 const [appealReason, setAppealReason] = useState("");
 const [appealLoading, setAppealLoading] = useState(false);
 const [appealSuccess, setAppealSuccess] = useState(false);
+  const [listingFeeModal, setListingFeeModal] = useState(false);
+const [listingFeeEmail, setListingFeeEmail] = useState("");
+const [listingFeeEmailError, setListingFeeEmailError] = useState("");
+const [listingFeePaying, setListingFeePaying] = useState(false);
+const [listingFeeError, setListingFeeError] = useState("");
+const [pendingFreeEvent, setPendingFreeEvent] = useState<typeof formData | null>(null);
+const [paystackLoaded, setPaystackLoaded] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [editingEvent, setEditingEvent] = useState<OrganizerEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<OrganizerEvent | null>(null);
@@ -216,6 +233,18 @@ const [appealSuccess, setAppealSuccess] = useState(false);
     } catch { /* silent */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+// Load Paystack inline script
+useEffect(() => {
+  if (document.getElementById("paystack-inline")) {
+    setPaystackLoaded(true);
+    return;
+  }
+  const script = document.createElement("script");
+  script.id = "paystack-inline";
+  script.src = "https://js.paystack.co/v1/inline.js";
+  script.onload = () => setPaystackLoaded(true);
+  document.body.appendChild(script);
+}, []);
 
   const checkPasswordStrength = (pass: string) => {
     let score = 0;
@@ -514,6 +543,99 @@ const handleAppeal = async (eventId: string) => {
   } finally {
     setAppealLoading(false);
   }
+};
+  const handleListingFeePayment = () => {
+  if (!listingFeeEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(listingFeeEmail)) {
+    setListingFeeEmailError("Enter a valid email address");
+    return;
+  }
+  setListingFeeEmailError("");
+  setListingFeeError("");
+
+  const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+  if (!publicKey || !paystackLoaded || !window.PaystackPop) {
+    setListingFeeError("Payment gateway still loading. Please try again.");
+    return;
+  }
+
+  setListingFeePaying(true);
+
+  const ref = `NENE-LISTING-${Date.now()}`;
+  const handler = window.PaystackPop.setup({
+    key: publicKey,
+    email: listingFeeEmail,
+    amount: 5000 * 100, // KES 5,000 in kobo
+    currency: "KES",
+    ref,
+    onClose: () => setListingFeePaying(false),
+    callback: async (response) => {
+      // Verify payment
+      try {
+        const res = await fetch(`/api/paystack/verify/${response.reference}`);
+        const data = await res.json() as { paid: boolean };
+        if (!data.paid) {
+          setListingFeeError("Payment could not be verified. Please try again.");
+          setListingFeePaying(false);
+          return;
+        }
+        // Payment confirmed — close modal and publish event
+        setListingFeeModal(false);
+        setListingFeePaying(false);
+        setListingFeeEmail("");
+        setIsLoading(true);
+        await handlePublishAfterPayment();
+      } catch {
+        setListingFeeError("Verification failed. Contact support if money was deducted.");
+        setListingFeePaying(false);
+      }
+    },
+  });
+
+  handler.openIframe();
+};
+
+// Separated publish logic (called after fee payment confirmed)
+const handlePublishAfterPayment = async () => {
+  const lowestPrice = tickets.length > 0
+    ? Math.min(...tickets.map((t) => parseInt(t.price) || 0))
+    : 0;
+
+  const formattedDate = formData.date
+    ? new Date(formData.date + "T12:00:00").toLocaleDateString("en-KE", {
+        month: "short", day: "numeric", year: "numeric",
+      })
+    : formData.date;
+
+  const id = Date.now().toString();
+  const newEvent: OrganizerEvent = {
+    id,
+    title: formData.title,
+    description: formData.description,
+    date: formattedDate,
+    time: formData.time,
+    location: formData.location,
+    price: `KES ${lowestPrice.toLocaleString()}`,
+    image: formData.image,
+    category: formData.category,
+    aiTag: "New Added ✨",
+    tickets,
+    organizerEmail: host?.email ?? "",
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newEvent),
+    });
+  } catch { /* silent */ }
+
+  setMyEvents((prev) => [newEvent, ...prev]);
+  setPublishedId(id);
+  setIsLoading(false);
+  setIsPublished(true);
+  setView("create");
 };
   
   const toggleRefund = (ticketId: string) => {
@@ -1438,6 +1560,103 @@ const handleAppeal = async (eventId: string) => {
           </div>
         </>
       )}
+    </div>
+  </div>
+)}
+
+        {/* ── Listing Fee Modal ── */}
+{listingFeeModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+
+      {/* Header */}
+      <div className="text-center mb-6">
+        <div className="w-16 h-16 bg-green-600/20 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
+          <Ticket className="w-8 h-8 text-green-400" />
+        </div>
+        <h3 className="font-bold text-lg text-white">Free Event Listing Fee</h3>
+        <p className="text-gray-400 text-sm mt-1">A one-time fee applies before your event goes live</p>
+      </div>
+
+      {/* Fee breakdown */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-5 space-y-3 text-sm">
+        <div className="flex justify-between text-gray-400">
+          <span>Listing fee (free events)</span>
+          <span className="font-bold text-white">KES 5,000</span>
+        </div>
+        <div className="flex justify-between text-gray-400">
+          <span>Per-ticket fee</span>
+          <span className="text-green-400 font-bold">None</span>
+        </div>
+        <div className="flex justify-between text-gray-400">
+          <span>Booking fee for attendees</span>
+          <span className="text-green-400 font-bold">None</span>
+        </div>
+        <div className="border-t border-white/10 pt-3 flex justify-between">
+          <span className="font-bold">Total due now</span>
+          <span className="text-xl font-bold text-blue-400">KES 5,000</span>
+        </div>
+      </div>
+
+      {/* Info notice */}
+      <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-5">
+        <p className="text-xs text-amber-300/80 leading-relaxed">
+          <strong className="text-amber-300">Why this fee?</strong> Free events generate no ticket revenue, so the KES 5,000 flat fee covers platform costs, event listing, and QR check-in infrastructure. It is charged once per event before admin review.
+        </p>
+      </div>
+
+      {/* Email input */}
+      <div className="mb-4">
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+          Email for payment receipt
+        </label>
+        <input
+          type="email"
+          value={listingFeeEmail}
+          onChange={(e) => { setListingFeeEmail(e.target.value); setListingFeeEmailError(""); }}
+          placeholder="you@example.com"
+          className={`w-full bg-black/50 border rounded-xl p-3 text-white text-sm outline-none transition placeholder:text-gray-700 ${
+            listingFeeEmailError ? "border-red-500" : "border-white/10 focus:border-blue-500"
+          }`}
+        />
+        {listingFeeEmailError && (
+          <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" /> {listingFeeEmailError}
+          </p>
+        )}
+      </div>
+
+      {listingFeeError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
+          <p className="text-xs text-red-400 flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5" /> {listingFeeError}
+          </p>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => { setListingFeeModal(false); setListingFeeEmail(""); setListingFeeError(""); }}
+          className="flex-1 border border-white/10 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/5 transition text-sm"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleListingFeePayment}
+          disabled={listingFeePaying || !paystackLoaded}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center gap-2"
+        >
+          {listingFeePaying
+            ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
+            : <><CreditCard className="w-4 h-4" /> Pay KES 5,000</>
+          }
+        </button>
+      </div>
+
+      <p className="text-xs text-gray-600 text-center mt-3">
+        Secured by Paystack · M-Pesa, Visa, Mastercard accepted
+      </p>
     </div>
   </div>
 )}

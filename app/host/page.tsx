@@ -752,10 +752,19 @@ const handlePublishAfterPayment = async () => {
   // Intercept free events — charge KES 5,000 listing fee first
   const isFreeEvent = tickets.every((t) => !t.price || parseInt(t.price || "0") === 0);
   if (isFreeEvent && !editingEvent) {
-    setPendingFreeEvent(formData);
-    setListingFeeModal(true);
-    return;
+  if (!document.getElementById("paystack-inline")) {
+    const script = document.createElement("script");
+    script.id = "paystack-inline";
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.onload = () => setPaystackLoaded(true);
+    document.body.appendChild(script);
+  } else {
+    setPaystackLoaded(true);
   }
+  setPendingFreeEvent(formData);
+  setListingFeeModal(true);
+  return;
+}
 
   setIsLoading(true);
 

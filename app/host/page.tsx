@@ -12,17 +12,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { uploadImage } from "../../libs/uploadImage";
-declare global {
-  interface Window {
-    PaystackPop: {
-      setup: (options: {
-        key: string; email: string; amount: number; currency: string;
-        ref: string; onClose: () => void;
-        callback: (response: { reference: string }) => void;
-      }) => { openIframe: () => void };
-    };
-  }
-}
 interface TicketType {
   name: string;
   price: string;

@@ -5,13 +5,14 @@ import Navbar from "../../components/shared/Navbar";
 import {
   Upload, CheckCircle2, DollarSign, Sparkles, Plus, Trash2, Tag,
   BarChart3, Users, ArrowLeft, LogOut, Eye, EyeOff, Lock,
-  ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar, CreditCard,
+  ShieldCheck, AlertCircle, ScanLine, Ticket, TrendingUp, Calendar,
   ExternalLink, Edit2, MapPin, FileText, Hash, ChevronDown,
   Download, Search, CheckCheck, Clock, Phone, Mail, UserCheck, XCircle, PieChart,
   ToggleLeft, ToggleRight, Percent, BadgeDollarSign
 } from "lucide-react";
 import Link from "next/link";
 import { uploadImage } from "../../libs/uploadImage";
+
 interface TicketType {
   name: string;
   price: string;
@@ -35,9 +36,6 @@ interface OrganizerEvent {
   cancelled?: boolean;
   cancelReason?: string;
   cancelledAt?: string | null;
-  status?: "pending" | "approved" | "rejected";
-  rejectReason?: string;
-  appealReason?: string;
 }
 
 interface Host {
@@ -117,17 +115,6 @@ export default function HostPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
-  const [appealModal, setAppealModal] = useState<string | null>(null);
-const [appealReason, setAppealReason] = useState("");
-const [appealLoading, setAppealLoading] = useState(false);
-const [appealSuccess, setAppealSuccess] = useState(false);
-  const [listingFeeModal, setListingFeeModal] = useState(false);
-const [listingFeeEmail, setListingFeeEmail] = useState("");
-const [listingFeeEmailError, setListingFeeEmailError] = useState("");
-const [listingFeePaying, setListingFeePaying] = useState(false);
-const [listingFeeError, setListingFeeError] = useState("");
-const [pendingFreeEvent, setPendingFreeEvent] = useState<typeof formData | null>(null);
-const [paystackLoaded, setPaystackLoaded] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [editingEvent, setEditingEvent] = useState<OrganizerEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<OrganizerEvent | null>(null);
@@ -158,6 +145,10 @@ const [paystackLoaded, setPaystackLoaded] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpResending, setOtpResending] = useState(false);
+
+  // Listing fee (free events)
+  const [listingFeeEventId, setListingFeeEventId] = useState<string | null>(null);
+  const [listingFeeLoading, setListingFeeLoading] = useState(false);
 
   const loadDashboardData = useCallback(async (currentHost?: Host) => {
     const activeHost = currentHost ?? host;
@@ -222,18 +213,6 @@ const [paystackLoaded, setPaystackLoaded] = useState(false);
     } catch { /* silent */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-// Load Paystack inline script
-useEffect(() => {
-  if (document.getElementById("paystack-inline")) {
-    setPaystackLoaded(true);
-    return;
-  }
-  const script = document.createElement("script");
-  script.id = "paystack-inline";
-  script.src = "https://js.paystack.co/v1/inline.js";
-  script.onload = () => setPaystackLoaded(true);
-  document.body.appendChild(script);
-}, []);
 
   const checkPasswordStrength = (pass: string) => {
     let score = 0;
@@ -397,6 +376,58 @@ useEffect(() => {
     }
   };
 
+  // Load Paystack inline script once
+  useEffect(() => {
+    if (document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]')) return;
+    const s = document.createElement("script");
+    s.src = "https://js.paystack.co/v1/inline.js";
+    s.async = true;
+    document.body.appendChild(s);
+  }, []);
+
+  // Open Paystack popup for KES 5,000 listing fee
+  const openListingFeePaystack = (eventId: string) => {
+    setListingFeeEventId(eventId);
+    setListingFeeLoading(true);
+    const paystackKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handler = (window as any).PaystackPop?.setup({
+      key:      paystackKey,
+      email:    host?.email ?? "",
+      amount:   500000, // KES 5,000 in kobo
+      currency: "KES",
+      ref:      `listing_fee_${eventId}_${Date.now()}`,
+      metadata: { event_id: eventId, fee_type: "free_event_listing" },
+      callback: async (response: { reference: string }) => {
+        // Payment confirmed — move event to pending for admin review
+        await fetch(`/api/events/${eventId}`, {
+          method:  "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status:          "pending",
+            listingFeePaid:  true,
+            listingFeeRef:   response.reference,
+          }),
+        });
+        setMyEvents((prev) =>
+          prev.map((e) =>
+            e.id === eventId
+              ? { ...e, status: "pending" as unknown as string, listingFeePaid: true }
+              : e
+          )
+        );
+        setListingFeeEventId(null);
+        setListingFeeLoading(false);
+        setIsPublished(true);
+      },
+      onClose: () => {
+        setListingFeeEventId(null);
+        setListingFeeLoading(false);
+      },
+    });
+    handler?.openIframe();
+  };
+
   // Legacy handleSignup — not used (kept for type compatibility)
   const handleSignup = handleSignupStep1;
 
@@ -501,131 +532,6 @@ useEffect(() => {
     }
   };
 
-const handleAppeal = async (eventId: string) => {
-  if (!appealReason.trim()) return;
-  setAppealLoading(true);
-  try {
-    await fetch(`/api/events/${eventId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "pending",
-        appealReason: appealReason.trim(),
-        rejectReason: "",
-      }),
-    });
-    setMyEvents((prev) =>
-      prev.map((e) =>
-        e.id === eventId
-          ? { ...e, status: "pending", appealReason: appealReason.trim() }
-          : e
-      )
-    );
-    setAppealSuccess(true);
-    setTimeout(() => {
-      setAppealModal(null);
-      setAppealReason("");
-      setAppealSuccess(false);
-    }, 2000);
-  } catch {
-    alert("Could not submit appeal. Please try again.");
-  } finally {
-    setAppealLoading(false);
-  }
-};
-  const handleListingFeePayment = () => {
-  if (!listingFeeEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(listingFeeEmail)) {
-    setListingFeeEmailError("Enter a valid email address");
-    return;
-  }
-  setListingFeeEmailError("");
-  setListingFeeError("");
-
-  const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-  if (!publicKey || !paystackLoaded || !window.PaystackPop) {
-    setListingFeeError("Payment gateway still loading. Please try again.");
-    return;
-  }
-
-  setListingFeePaying(true);
-
-  const ref = `NENE-LISTING-${Date.now()}`;
-  const handler = window.PaystackPop.setup({
-    key: publicKey,
-    email: listingFeeEmail,
-    amount: 5000 * 100,
-    currency: "KES",
-    ref: ref,
-    onClose: () => setListingFeePaying(false),
-    callback: (response) => {
-      fetch(`/api/paystack/verify/${response.reference}`)
-        .then((res) => res.json())
-        .then((data: { paid: boolean }) => {
-          if (!data.paid) {
-            setListingFeeError("Payment could not be verified. Please try again.");
-            setListingFeePaying(false);
-            return;
-          }
-          setListingFeeModal(false);
-          setListingFeePaying(false);
-          setListingFeeEmail("");
-          setIsLoading(true);
-          handlePublishAfterPayment();
-        })
-        .catch(() => {
-          setListingFeeError("Verification failed. Contact support if money was deducted.");
-          setListingFeePaying(false);
-        });
-    },
-  });
-
-  handler.openIframe();
-};
-
-// Separated publish logic (called after fee payment confirmed)
-const handlePublishAfterPayment = async () => {
-  const lowestPrice = tickets.length > 0
-    ? Math.min(...tickets.map((t) => parseInt(t.price) || 0))
-    : 0;
-
-  const formattedDate = formData.date
-    ? new Date(formData.date + "T12:00:00").toLocaleDateString("en-KE", {
-        month: "short", day: "numeric", year: "numeric",
-      })
-    : formData.date;
-
-  const id = Date.now().toString();
-  const newEvent: OrganizerEvent = {
-    id,
-    title: formData.title,
-    description: formData.description,
-    date: formattedDate,
-    time: formData.time,
-    location: formData.location,
-    price: `KES ${lowestPrice.toLocaleString()}`,
-    image: formData.image,
-    category: formData.category,
-    aiTag: "New Added ✨",
-    tickets,
-    organizerEmail: host?.email ?? "",
-    createdAt: new Date().toISOString(),
-  };
-
-  try {
-    await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newEvent),
-    });
-  } catch { /* silent */ }
-
-  setMyEvents((prev) => [newEvent, ...prev]);
-  setPublishedId(id);
-  setIsLoading(false);
-  setIsPublished(true);
-  setView("create");
-};
-  
   const toggleRefund = (ticketId: string) => {
     const updated = { ...refunds, [ticketId]: !refunds[ticketId] };
     setRefunds(updated);
@@ -746,30 +652,15 @@ const handlePublishAfterPayment = async () => {
   };
 
   const handlePublish = async () => {
-  if (!formData.title || !formData.date || !formData.location) return;
-
-  // Intercept free events — charge KES 5,000 listing fee first
-  const isFreeEvent = tickets.every((t) => !t.price || parseInt(t.price || "0") === 0);
-  if (isFreeEvent && !editingEvent) {
-  if (!document.getElementById("paystack-inline")) {
-    const script = document.createElement("script");
-    script.id = "paystack-inline";
-    script.src = "https://js.paystack.co/v1/inline.js";
-    script.onload = () => setPaystackLoaded(true);
-    document.body.appendChild(script);
-  } else {
-    setPaystackLoaded(true);
-  }
-  setPendingFreeEvent(formData);
-  setListingFeeModal(true);
-  return;
-}
-
-  setIsLoading(true);
+    if (!formData.title || !formData.date || !formData.location) return;
+    setIsLoading(true);
 
     const lowestPrice = tickets.length > 0
       ? Math.min(...tickets.map((t) => parseInt(t.price) || 0))
       : 0;
+
+    // A free event = every ticket type has price 0 (or no tickets defined)
+    const isFreeEvent = tickets.length === 0 || tickets.every((t) => !parseInt(t.price));
 
     // Format date as "Jun 7, 2026" so it displays and sorts correctly everywhere
     const formattedDate = formData.date
@@ -798,7 +689,6 @@ const handlePublishAfterPayment = async () => {
           body: JSON.stringify(updates),
         });
       } catch { /* silent */ }
-      // Update state directly — no re-fetch needed
       setMyEvents((prev) =>
         prev.map((e) =>
           e.id === editingEvent.id ? { ...e, ...updates } : e
@@ -810,6 +700,11 @@ const handlePublishAfterPayment = async () => {
     } else {
       // Create new event via API
       const id = Date.now().toString();
+
+      // Free events start as "unpaid_listing_fee" — they require the KES 5,000 payment
+      // before moving to "pending" for admin review
+      const initialStatus = isFreeEvent ? "unpaid_listing_fee" : "pending";
+
       const newEvent: OrganizerEvent = {
         id,
         title: formData.title,
@@ -824,6 +719,7 @@ const handlePublishAfterPayment = async () => {
         tickets,
         organizerEmail: host?.email ?? "",
         createdAt: new Date().toISOString(),
+        ...(isFreeEvent ? { status: initialStatus } : {}),
       };
       try {
         await fetch("/api/events", {
@@ -832,11 +728,17 @@ const handlePublishAfterPayment = async () => {
           body: JSON.stringify(newEvent),
         });
       } catch { /* silent */ }
-      // Add to state directly — no re-fetch needed
+
       setMyEvents((prev) => [newEvent, ...prev]);
       setPublishedId(id);
       setIsLoading(false);
-      setIsPublished(true);
+
+      if (isFreeEvent) {
+        // Don't show success yet — open Paystack for the KES 5,000 listing fee
+        openListingFeePaystack(id);
+      } else {
+        setIsPublished(true);
+      }
     }
   };
 
@@ -1087,7 +989,7 @@ const handlePublishAfterPayment = async () => {
                   }
                 </button>
                 <div className="text-center">
-                  <p className="text-xs text-gray-600">Didn&apos;t receive it?{" "}
+                  <p className="text-xs text-gray-600">Didn't receive it?{" "}
                     <button onClick={resendOtp} disabled={otpResending} className="text-blue-400 hover:text-blue-300 font-bold transition">
                       {otpResending ? "Sending…" : "Resend code"}
                     </button>
@@ -1400,11 +1302,13 @@ const handlePublishAfterPayment = async () => {
                             {revenue > 0 ? `KES ${revenue.toLocaleString()}` : <span className="text-gray-600">—</span>}
                           </td>
                           <td className="px-5 py-4">
-                            {event.cancelled
+                            {(event as OrganizerEvent & { status?: string }).status === "unpaid_listing_fee"
+                              ? <span className="bg-orange-500/15 text-orange-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><AlertCircle className="w-3 h-3" /> FEE UNPAID</span>
+                              : event.cancelled
                               ? <span className="bg-red-500/15 text-red-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><XCircle className="w-3 h-3" /> CANCELLED</span>
                               : (event as OrganizerEvent & { status?: string }).status === "rejected"
                               ? <span className="bg-red-500/15 text-red-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><XCircle className="w-3 h-3" /> REJECTED</span>
-                              : (!( event as OrganizerEvent & { status?: string }).status || (event as OrganizerEvent & { status?: string }).status === "pending")
+                              : (!(event as OrganizerEvent & { status?: string }).status || (event as OrganizerEvent & { status?: string }).status === "pending")
                               ? <span className="bg-yellow-500/15 text-yellow-400 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 w-fit"><Clock className="w-3 h-3" /> PENDING</span>
                               : isPast
                               ? <span className="bg-white/10 text-gray-500 text-xs font-bold px-2 py-1 rounded-full">ENDED</span>
@@ -1420,6 +1324,19 @@ const handlePublishAfterPayment = async () => {
                               </div>
                             ) : (
                               <div className="flex items-center justify-end gap-1">
+                                {(event as OrganizerEvent & { status?: string }).status === "unpaid_listing_fee" && (
+                                  <button
+                                    onClick={() => openListingFeePaystack(event.id)}
+                                    disabled={listingFeeEventId === event.id}
+                                    className="text-xs font-bold bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 px-3 py-1.5 rounded-lg transition disabled:opacity-50 flex items-center gap-1.5 mr-1"
+                                    title="Pay KES 5,000 listing fee to submit for review"
+                                  >
+                                    {listingFeeEventId === event.id
+                                      ? <><div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" /> Paying…</>
+                                      : <><DollarSign className="w-3 h-3" /> Pay KES 5,000</>
+                                    }
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => { setSelectedEvent(event); setAttendeeSearch(""); setView("portal"); }}
                                   className="text-gray-600 hover:text-purple-400 transition p-1.5 rounded-lg hover:bg-purple-500/10"
@@ -1435,16 +1352,6 @@ const handlePublishAfterPayment = async () => {
                                 <button onClick={() => startEditEvent(event)} className="text-gray-600 hover:text-yellow-400 transition p-1.5 rounded-lg hover:bg-yellow-500/10" title="Edit event">
                                   <Edit2 className="w-4 h-4" />
                                 </button>
-                                {/* Appeal button — only for rejected events */}
-{(event as OrganizerEvent & { status?: string }).status === "rejected" && (
-  <button
-    onClick={() => { setAppealModal(event.id); setAppealReason(""); setAppealSuccess(false); }}
-    className="text-gray-600 hover:text-blue-400 transition p-1.5 rounded-lg hover:bg-blue-500/10"
-    title="Appeal rejection"
-  >
-    <FileText className="w-4 h-4" />
-  </button>
-)}
                                 {event.cancelled ? (
                                   <button onClick={() => handleRestoreEvent(event.id)} className="text-gray-600 hover:text-green-400 transition p-1.5 rounded-lg hover:bg-green-500/10" title="Restore event">
                                     <CheckCircle2 className="w-4 h-4" />
@@ -1519,153 +1426,6 @@ const handlePublishAfterPayment = async () => {
             </div>
           </div>
         )}
-
-        {/* ── Appeal Modal ── */}
-{appealModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-    <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-      {appealSuccess ? (
-        <div className="text-center py-6">
-          <div className="w-16 h-16 bg-green-500/20 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="w-8 h-8 text-green-400" />
-          </div>
-          <h3 className="font-bold text-lg text-white mb-2">Appeal Submitted!</h3>
-          <p className="text-gray-400 text-sm">Your event has been resubmitted for review. We will notify you via email once a decision is made.</p>
-        </div>
-      ) : (
-        <>
-          <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-400" /> Appeal Rejection
-          </h3>
-          <p className="text-gray-400 text-sm mb-4">Explain why you believe your event should be approved. Our team will review your appeal and respond via email.</p>
-          {myEvents.find((e) => e.id === appealModal)?.rejectReason && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
-              <p className="text-xs font-bold text-red-400 mb-1">Rejection reason:</p>
-              <p className="text-xs text-red-300/70">{myEvents.find((e) => e.id === appealModal)?.rejectReason}</p>
-            </div>
-          )}
-          <div className="mb-4">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Your Appeal <span className="text-red-400">*</span></label>
-            <textarea
-              value={appealReason}
-              onChange={(e) => setAppealReason(e.target.value)}
-              placeholder="e.g. We have updated the event details, secured the venue permit, and ensured all safety requirements are met…"
-              rows={4}
-              className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500 transition resize-none placeholder:text-gray-700"
-            />
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => { setAppealModal(null); setAppealReason(""); }} className="flex-1 border border-white/10 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/5 transition text-sm">Cancel</button>
-            <button
-              onClick={() => handleAppeal(appealModal)}
-              disabled={appealLoading || !appealReason.trim()}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center gap-2"
-            >
-              {appealLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Submitting…</> : <><FileText className="w-4 h-4" /> Submit Appeal</>}
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  </div>
-)}
-
-        {/* ── Listing Fee Modal ── */}
-{listingFeeModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-    <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-
-      {/* Header */}
-      <div className="text-center mb-6">
-        <div className="w-16 h-16 bg-green-600/20 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
-          <Ticket className="w-8 h-8 text-green-400" />
-        </div>
-        <h3 className="font-bold text-lg text-white">Free Event Listing Fee</h3>
-        <p className="text-gray-400 text-sm mt-1">A one-time fee applies before your event goes live</p>
-      </div>
-
-      {/* Fee breakdown */}
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-5 space-y-3 text-sm">
-        <div className="flex justify-between text-gray-400">
-          <span>Listing fee (free events)</span>
-          <span className="font-bold text-white">KES 5,000</span>
-        </div>
-        <div className="flex justify-between text-gray-400">
-          <span>Per-ticket fee</span>
-          <span className="text-green-400 font-bold">None</span>
-        </div>
-        <div className="flex justify-between text-gray-400">
-          <span>Booking fee for attendees</span>
-          <span className="text-green-400 font-bold">None</span>
-        </div>
-        <div className="border-t border-white/10 pt-3 flex justify-between">
-          <span className="font-bold">Total due now</span>
-          <span className="text-xl font-bold text-blue-400">KES 5,000</span>
-        </div>
-      </div>
-
-      {/* Info notice */}
-      <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-5">
-        <p className="text-xs text-amber-300/80 leading-relaxed">
-          <strong className="text-amber-300">Why this fee?</strong> Free events generate no ticket revenue, so the KES 5,000 flat fee covers platform costs, event listing, and QR check-in infrastructure. It is charged once per event before admin review.
-        </p>
-      </div>
-
-      {/* Email input */}
-      <div className="mb-4">
-        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-          Email for payment receipt
-        </label>
-        <input
-          type="email"
-          value={listingFeeEmail}
-          onChange={(e) => { setListingFeeEmail(e.target.value); setListingFeeEmailError(""); }}
-          placeholder="you@example.com"
-          className={`w-full bg-black/50 border rounded-xl p-3 text-white text-sm outline-none transition placeholder:text-gray-700 ${
-            listingFeeEmailError ? "border-red-500" : "border-white/10 focus:border-blue-500"
-          }`}
-        />
-        {listingFeeEmailError && (
-          <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" /> {listingFeeEmailError}
-          </p>
-        )}
-      </div>
-
-      {listingFeeError && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
-          <p className="text-xs text-red-400 flex items-center gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5" /> {listingFeeError}
-          </p>
-        </div>
-      )}
-
-      {/* Action buttons */}
-      <div className="flex gap-3">
-        <button
-          onClick={() => { setListingFeeModal(false); setListingFeeEmail(""); setListingFeeError(""); }}
-          className="flex-1 border border-white/10 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/5 transition text-sm"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleListingFeePayment}
-          disabled={listingFeePaying || !paystackLoaded}
-          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center gap-2"
-        >
-          {listingFeePaying
-            ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
-            : <><CreditCard className="w-4 h-4" /> Pay KES 5,000</>
-          }
-        </button>
-      </div>
-
-      <p className="text-xs text-gray-600 text-center mt-3">
-        Secured by Paystack · M-Pesa, Visa, Mastercard accepted
-      </p>
-    </div>
-  </div>
-)}
       </main>
     );
   }
@@ -2243,81 +2003,6 @@ const handlePublishAfterPayment = async () => {
           </div>
         </div>
       </div>
-
-      {/* ── Listing Fee Modal ── */}
-      {listingFeeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-green-600/20 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <Ticket className="w-8 h-8 text-green-400" />
-              </div>
-              <h3 className="font-bold text-lg text-white">Free Event Listing Fee</h3>
-              <p className="text-gray-400 text-sm mt-1">A one-time fee applies before your event goes live</p>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-5 space-y-3 text-sm">
-              <div className="flex justify-between text-gray-400">
-                <span>Listing fee (free events)</span>
-                <span className="font-bold text-white">KES 5,000</span>
-              </div>
-              <div className="flex justify-between text-gray-400">
-                <span>Per-ticket fee</span>
-                <span className="text-green-400 font-bold">None</span>
-              </div>
-              <div className="flex justify-between text-gray-400">
-                <span>Booking fee for attendees</span>
-                <span className="text-green-400 font-bold">None</span>
-              </div>
-              <div className="border-t border-white/10 pt-3 flex justify-between">
-                <span className="font-bold">Total due now</span>
-                <span className="text-xl font-bold text-blue-400">KES 5,000</span>
-              </div>
-            </div>
-            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-5">
-              <p className="text-xs text-amber-300/80 leading-relaxed">
-                <strong className="text-amber-300">Why this fee?</strong> Free events generate no ticket revenue, so the KES 5,000 flat fee covers platform costs, event listing, and QR check-in infrastructure.
-              </p>
-            </div>
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Email for payment receipt</label>
-              <input
-                type="email"
-                value={listingFeeEmail}
-                onChange={(e) => { setListingFeeEmail(e.target.value); setListingFeeEmailError(""); }}
-                placeholder="you@example.com"
-                className={`w-full bg-black/50 border rounded-xl p-3 text-white text-sm outline-none transition placeholder:text-gray-700 ${listingFeeEmailError ? "border-red-500" : "border-white/10 focus:border-blue-500"}`}
-              />
-              {listingFeeEmailError && (
-                <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {listingFeeEmailError}</p>
-              )}
-            </div>
-            {listingFeeError && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
-                <p className="text-xs text-red-400 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> {listingFeeError}</p>
-              </div>
-            )}
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setListingFeeModal(false); setListingFeeEmail(""); setListingFeeError(""); }}
-                className="flex-1 border border-white/10 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/5 transition text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleListingFeePayment}
-                disabled={listingFeePaying || !paystackLoaded}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center gap-2"
-              >
-                {listingFeePaying
-                  ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
-                  : <><CreditCard className="w-4 h-4" /> Pay KES 5,000</>
-                }
-              </button>
-            </div>
-            <p className="text-xs text-gray-600 text-center mt-3">Secured by Paystack · M-Pesa, Visa, Mastercard accepted</p>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

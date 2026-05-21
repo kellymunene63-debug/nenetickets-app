@@ -50,6 +50,7 @@ type RawEvent = {
   id: string; title: string; description?: string; date: string; time?: string;
   location: string; image: string; category: string; aiTag?: string;
   cancelled?: boolean; cancelReason?: string;
+  status?: string;
   tickets?: { name: string; price: string; capacity?: string }[];
 };
 

@@ -1,10 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-
 export const dynamic = "force-dynamic";
 import Navbar from "../../components/shared/Navbar";
 import EventsClient from "../../components/events/EventsClient";
-import { DEFAULT_EVENTS } from "../../libs/events";
 import type { Event } from "../../libs/events";
 
 export const metadata: Metadata = {
@@ -26,6 +24,7 @@ const CATEGORY_THUMBNAILS: Record<string, string> = {
   "Food & Drink": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=2074",
   "Charity":      "https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=2070",
 };
+
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070";
 
 function thumbnailFor(image: string, category: string): string {
@@ -50,8 +49,9 @@ async function fetchHostedEvents(): Promise<Event[]> {
 
     const res = await fetch(`${url}/get/${encodeURIComponent("nene:events")}`, {
       headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store", // always fetch fresh — events must appear immediately after creation
+      cache: "no-store",
     });
+
     const json = await res.json() as { result: unknown };
     if (!json.result) return [];
 
@@ -61,14 +61,13 @@ async function fetchHostedEvents(): Promise<Event[]> {
     if (!Array.isArray(parsed)) return [];
 
     const raw = parsed as Array<{
-  id: string; title: string; date: string; location: string;
-  price: string; image: string; category: string; aiTag?: string;
-  createdAt?: string; cancelled?: boolean; status?: string;
-}>;
+      id: string; title: string; date: string; location: string;
+      price: string; image: string; category: string; aiTag?: string;
+      createdAt?: string; cancelled?: boolean; status?: string;
+    }>;
 
     return raw
-  .filter((e) => !e.cancelled && e.status === "approved")
-      // Most recently created events appear first
+      .filter((e) => !e.cancelled && e.status === "approved")
       .sort((a, b) =>
         new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
       )
@@ -78,7 +77,6 @@ async function fetchHostedEvents(): Promise<Event[]> {
         date:     e.date,
         location: e.location,
         price:    e.price,
-        // Use category-matching stock thumbnail for uploaded images (base64 too large for HTML)
         image:    thumbnailFor(e.image, e.category),
         category: e.category,
         aiTag:    e.aiTag ?? "New Added ✨",
@@ -107,18 +105,9 @@ function EventsSkeleton() {
   );
 }
 
-// ─── Async component that owns the data fetch ────────────────────────────────
-// Placed inside <Suspense> so the Navbar + skeleton render immediately while
-// this component resolves. The 3-second timeout ensures it never hangs.
 async function EventsData() {
-  const hosted = await withTimeout(fetchHostedEvents(), 3000, []);
-
-  // Hosted events first (newest first), then the default demo events — no duplicates
-  const defaultIds = new Set(DEFAULT_EVENTS.map((e) => e.id));
-  const newHosted  = hosted.filter((e) => !defaultIds.has(e.id));
-  const allEvents  = [...newHosted, ...DEFAULT_EVENTS];
-
-  return <EventsClient defaultEvents={allEvents} />;
+  const events = await withTimeout(fetchHostedEvents(), 3000, []);
+  return <EventsClient defaultEvents={events} />;
 }
 
 export default function AllEventsPage() {
@@ -133,7 +122,6 @@ export default function AllEventsPage() {
           </div>
         }
       >
-        {/* EventsData is async — Suspense shows the skeleton while it resolves */}
         <EventsData />
       </Suspense>
     </main>

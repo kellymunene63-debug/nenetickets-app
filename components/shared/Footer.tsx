@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Ticket, Twitter, Instagram, Facebook, MessageCircle } from "lucide-react";
+import Image from "next/image";
+import { Twitter, Instagram, Facebook, MessageCircle } from "lucide-react";
 
 const LINKS = {
   Discover: [
@@ -38,15 +39,15 @@ export default function Footer() {
 
           {/* Brand */}
           <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="bg-blue-600 p-2 rounded-xl">
-                <Ticket className="w-5 h-5 text-white transform -rotate-45" />
-              </div>
-              <span className="text-xl font-bold tracking-tight text-white">
-                Nene<span className="text-blue-400">Tickets</span>
-              </span>
+            <Link href="/" className="flex items-center mb-4">
+              <Image
+                src="/logo.png"
+                alt="NeneTickets"
+                width={160}
+                height={40}
+                className="h-10 w-auto object-contain"
+              />
             </Link>
-
             <p className="text-gray-400 text-sm leading-relaxed mb-6 max-w-xs">
               Kenya&apos;s fastest ticket platform. Book concerts, matches, and conferences — pay with M-Pesa in seconds.
             </p>

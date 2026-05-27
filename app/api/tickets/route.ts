@@ -5,7 +5,6 @@
 
 import { NextResponse } from "next/server";
 import { auth }         from "@clerk/nextjs/server";
-import { randomUUID }   from "crypto";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -94,7 +93,7 @@ export async function POST(req: Request) {
     const ticket = await req.json() as TicketPayload;
 
     // Generate a unique scannable token for this ticket
-    const ticketToken = `tk_${randomUUID().replace(/-/g, "")}`;
+    const ticketToken = `tk_${crypto.randomUUID().replace(/-/g, "")}`;
 
     // Attach the token to the ticket object
     const ticketWithToken = {

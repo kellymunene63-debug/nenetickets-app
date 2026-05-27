@@ -26,43 +26,18 @@ async function fetchAllEvents(): Promise<HostedEvent[]> {
   if (!url || !token) return [];
 
   try {
-    // Use KEYS to find all hosted-event buckets
-    const keysRes = await fetch(`${url}/keys/nene:hosted_events:*`, {
+    const res  = await fetch(`${url}/get/${encodeURIComponent("nene:events")}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
-    const keysJson = await keysRes.json() as { result: string[] };
-    const keys: string[] = keysJson.result ?? [];
+    const json = await res.json() as { result: string | null };
+    if (!json.result) return [];
 
-    if (keys.length === 0) return [];
+    let data: unknown = json.result;
+    if (typeof data === "string") data = JSON.parse(data);
+    if (typeof data === "string") data = JSON.parse(data);
 
-    // Fetch each bucket in one pipeline call
-    const pipeline = keys.map((k) => ["GET", k]);
-    const pipeRes  = await fetch(`${url}/pipeline`, {
-      method:  "POST",
-      headers: {
-        Authorization:  `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(pipeline),
-      cache: "no-store",
-    });
-    const pipeJson = await pipeRes.json() as { result: string | null }[];
-
-    const allEvents: HostedEvent[] = [];
-    for (const item of pipeJson) {
-      if (!item.result) continue;
-      try {
-        const parsed = JSON.parse(item.result);
-        const events: HostedEvent[] = typeof parsed === "string"
-          ? JSON.parse(parsed)
-          : parsed;
-        if (Array.isArray(events)) allEvents.push(...events);
-      } catch {
-        // skip malformed entries
-      }
-    }
-    return allEvents;
+    return Array.isArray(data) ? (data as HostedEvent[]) : [];
   } catch {
     return [];
   }

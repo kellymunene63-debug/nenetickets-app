@@ -52,8 +52,7 @@ export default function ScanPage() {
   const [scanCount,       setScanCount]       = useState(0);
 
   const scannerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const html5QrRef = useRef<any>(null);
+  const html5QrRef = useRef<{ stop: () => Promise<void> } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Load organiser's events ────────────────────────────────────

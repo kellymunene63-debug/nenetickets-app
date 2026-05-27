@@ -1,10 +1,10 @@
 "use client";
-
 import Navbar from "../../components/shared/Navbar";
 import { useEffect, useState } from "react";
 import { Ticket, Calendar, MapPin, Download, Share2, MessageCircle, ChevronRight, Inbox, XCircle } from "lucide-react";
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
+import TicketQRCode from "@/components/tickets/TicketQRCode";
 
 interface PurchasedTicket {
   id: string;
@@ -18,16 +18,7 @@ interface PurchasedTicket {
   image: string;
   purchasedAt: string;
   phone: string;
-}
-
-function QRCode({ value }: { value: string }) {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(value)}&color=111111&bgcolor=ffffff&margin=10`;
-  return (
-    <div style={{ background: "white", borderRadius: 8, padding: 6, display: "inline-block" }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={qrUrl} alt={`QR code for ticket ${value}`} width={110} height={110} style={{ display: "block", borderRadius: 4 }} />
-    </div>
-  );
+  ticketToken?: string;
 }
 
 function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancelled?: boolean }) {
@@ -61,7 +52,6 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
             className="w-20 md:w-28 object-cover flex-shrink-0"
           />
         )}
-
         {/* Main content */}
         <div className="flex-1 p-4 md:p-5">
           <div className="flex items-start justify-between gap-2 mb-2">
@@ -78,9 +68,7 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
             </div>
             <span className="text-xs text-gray-600 flex-shrink-0">#{ticket.id}</span>
           </div>
-
           <h3 className="font-bold text-white text-base leading-tight mb-2">{ticket.title}</h3>
-
           <div className="space-y-1 text-xs text-gray-400">
             <div className="flex items-center gap-1.5">
               <Calendar className="w-3 h-3 text-gray-600" /> {ticket.date} at {ticket.time}
@@ -90,7 +78,6 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
             </div>
           </div>
         </div>
-
         {/* Right: price + expand toggle */}
         <div className="flex flex-col items-end justify-between p-4 flex-shrink-0">
           <span className="text-sm font-bold text-white">KES {ticket.price.toLocaleString()}</span>
@@ -119,15 +106,16 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
       {expanded && (
         <div className="border-t border-dashed border-white/10 px-5 py-5 flex flex-col md:flex-row items-center gap-6">
           <div className="text-center">
-            <QRCode value={ticket.id} />
-            <p className="text-xs text-gray-500 mt-2 font-mono tracking-widest">{ticket.id}</p>
+            <TicketQRCode
+              ticketToken={ticket.ticketToken ?? ticket.id}
+              eventTitle={ticket.title}
+              bookingRef={ticket.id}
+            />
           </div>
-
           <div className="flex-1 space-y-3 w-full">
             <p className="text-xs text-gray-500 text-center md:text-left">
               Show this QR code at the venue gate. Each code is unique and can only be scanned once.
             </p>
-
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-black/30 rounded-xl p-3">
                 <p className="text-gray-500 mb-0.5">Quantity</p>
@@ -138,7 +126,6 @@ function TicketCard({ ticket, isCancelled }: { ticket: PurchasedTicket; isCancel
                 <p className="font-bold">{new Date(ticket.purchasedAt).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}</p>
               </div>
             </div>
-
             <div className="flex gap-2">
               <button
                 onClick={handleShare}
@@ -221,7 +208,6 @@ export default function MyTicketsPage() {
   return (
     <main className="min-h-screen bg-[#050511] text-white">
       <Navbar />
-
       <SignedOut>
         <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-center px-4 pt-20">
           <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mb-2">
@@ -236,7 +222,6 @@ export default function MyTicketsPage() {
           </SignInButton>
         </div>
       </SignedOut>
-
       <SignedIn>
         <div className="container mx-auto px-4 pt-28 pb-16 max-w-2xl">
           <div className="flex items-center justify-between mb-8">

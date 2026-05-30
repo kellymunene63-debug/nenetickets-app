@@ -1,114 +1,89 @@
+// app/api/events/[id]/capacity/route.ts
+// Called after every successful ticket purchase to record the sale.
+// The event page reads capacity from `nene:sold:{id}` (sold counts per ticket
+// type) and subtracts from the original capacity — so we increment that key
+// here rather than touching the event's capacity field.
+//
+// PATCH body: { ticketType: string, quantity: number }
+// Returns:    { success: boolean, sold: number }
+
 import { NextResponse } from "next/server";
 
 export const runtime = "edge";
+export const dynamic = "force-dynamic";
 
-const EVENTS_KEY = "nene:events";
+// ─── Redis helpers ────────────────────────────────────────────────
 
 async function redisGet<T>(key: string): Promise<T | null> {
   const url   = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
+
   const res  = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
   const json = await res.json() as { result: string | null };
-  return json.result ? (JSON.parse(json.result) as T) : null;
+  if (!json.result) return null;
+
+  try {
+    let data: unknown = json.result;
+    if (typeof data === "string") data = JSON.parse(data);
+    if (typeof data === "string") data = JSON.parse(data);
+    return data as T;
+  } catch {
+    return null;
+  }
 }
 
 async function redisSet(key: string, value: unknown): Promise<void> {
   const url   = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return;
-  await fetch(`${url}/pipeline`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify([["SET", key, JSON.stringify(value)]]),
+
+  await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+    method:  "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "text/plain" },
+    body:    JSON.stringify(value),
   });
 }
 
-interface TicketType {
-  name: string;
-  price: string;
-  capacity: string;
-}
+// ─── PATCH /api/events/[id]/capacity ─────────────────────────────
 
-interface StoredEvent {
-  id: string;
-  tickets?: TicketType[];
-  [key: string]: unknown;
-}
-
-type SoldCounts = Record<string, number>;
-
-// GET /api/events/[id]/capacity
-// Returns { ticketType: { sold, capacity, available, soldOut } }
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const events = await redisGet<StoredEvent[]>(EVENTS_KEY) ?? [];
-    const event  = events.find((e) => e.id === params.id);
-    if (!event) return NextResponse.json({}, { status: 404 });
-
-    const soldKey   = `nene:sold:${params.id}`;
-    const soldCounts = await redisGet<SoldCounts>(soldKey) ?? {};
-
-    const result: Record<string, { sold: number; capacity: number; available: number; soldOut: boolean }> = {};
-
-    (event.tickets ?? []).forEach((t) => {
-      const cap  = parseInt(t.capacity) || 0;
-      const sold = soldCounts[t.name] ?? 0;
-      result[t.name] = {
-        sold,
-        capacity: cap,
-        available: Math.max(0, cap - sold),
-        soldOut: cap > 0 && sold >= cap,
-      };
-    });
-
-    return NextResponse.json(result);
-  } catch (err) {
-    console.error("GET /api/events/[id]/capacity:", err);
-    return NextResponse.json({}, { status: 500 });
-  }
-}
-
-// POST /api/events/[id]/capacity
-// Body: { ticketType: string; quantity: number }
-// Increments sold count — called by verify route after successful payment
-export async function POST(
+export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { ticketType, quantity = 1 } = await req.json() as { ticketType: string; quantity?: number };
-    if (!ticketType) return NextResponse.json({ error: "ticketType required" }, { status: 400 });
+    const { ticketType, quantity } = await req.json() as {
+      ticketType: string;
+      quantity:   number;
+    };
 
-    const soldKey    = `nene:sold:${params.id}`;
-    const soldCounts = await redisGet<SoldCounts>(soldKey) ?? {};
-
-    // Check capacity before incrementing
-    const events = await redisGet<StoredEvent[]>(EVENTS_KEY) ?? [];
-    const event  = events.find((e) => e.id === params.id);
-    if (event) {
-      const ticket = (event.tickets ?? []).find((t) => t.name === ticketType);
-      if (ticket) {
-        const cap  = parseInt(ticket.capacity) || 0;
-        const sold = soldCounts[ticketType] ?? 0;
-        if (cap > 0 && sold + quantity > cap) {
-          return NextResponse.json({ error: "sold_out", available: Math.max(0, cap - sold) }, { status: 409 });
-        }
-      }
+    if (!ticketType || !quantity || quantity < 1) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
-    soldCounts[ticketType] = (soldCounts[ticketType] ?? 0) + quantity;
-    await redisSet(soldKey, soldCounts);
+    // The event page tracks sales in nene:sold:{eventId}
+    // shaped as: { "Regular": 5, "VIP": 2 }
+    const soldKey    = `nene:sold:${params.id}`;
+    const soldCounts = await redisGet<Record<string, number>>(soldKey) ?? {};
 
-    return NextResponse.json({ success: true, sold: soldCounts[ticketType] });
+    // Find the existing key with matching name (case-insensitive) so we
+    // preserve the exact casing used by the event page for its lookup.
+    const matchedKey =
+      Object.keys(soldCounts).find(
+        (k) => k.toLowerCase() === ticketType.toLowerCase()
+      ) ?? ticketType; // fall back to the name sent by the client
+
+    const currentSold = soldCounts[matchedKey] ?? 0;
+    const newSold     = currentSold + quantity;
+
+    await redisSet(soldKey, { ...soldCounts, [matchedKey]: newSold });
+
+    return NextResponse.json({ success: true, sold: newSold });
   } catch (err) {
-    console.error("POST /api/events/[id]/capacity:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("PATCH /api/events/[id]/capacity:", err);
+    return NextResponse.json({ success: false }, { status: 500 });
   }
 }

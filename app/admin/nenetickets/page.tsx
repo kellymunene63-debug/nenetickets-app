@@ -1,10 +1,10 @@
 "use client";
-
 import { useState, useEffect, useCallback } from "react";
 import {
   ShieldCheck, Lock, Eye, EyeOff, CheckCircle2, XCircle,
   Clock, AlertCircle, RefreshCw, LogOut, Ticket, Calendar,
   MapPin, User, Mail, Phone, CreditCard, Search, Filter,
+  Pencil, Save, X,
 } from "lucide-react";
 
 interface Event {
@@ -14,6 +14,9 @@ interface Event {
   time?: string;
   location: string;
   category?: string;
+  description?: string;
+  price?: string;
+  image?: string;
   organizerEmail?: string;
   organizerName?: string;
   status?: "pending" | "approved" | "rejected";
@@ -25,10 +28,22 @@ interface Event {
   bankName?: string;
   accountNumber?: string;
   accountName?: string;
-  image?: string;
+}
+
+interface EditForm {
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  category: string;
+  description: string;
+  price: string;
+  image: string;
 }
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
+
+const CATEGORIES = ["Music", "Sports", "Business", "Arts", "Tech", "Nightlife", "Adventure", "Other"];
 
 export default function AdminPage() {
   const [authed,       setAuthed]       = useState(false);
@@ -36,7 +51,6 @@ export default function AdminPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [authError,    setAuthError]    = useState("");
   const [authLoading,  setAuthLoading]  = useState(false);
-
   const [events,       setEvents]       = useState<Event[]>([]);
   const [loading,      setLoading]      = useState(false);
   const [actionId,     setActionId]     = useState<string | null>(null);
@@ -44,6 +58,16 @@ export default function AdminPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
   const [search,       setSearch]       = useState("");
+
+  // ── Edit state ───────────────────────────────────────────────────
+  const [editModal,   setEditModal]   = useState<string | null>(null);
+  const [editForm,    setEditForm]    = useState<EditForm>({
+    title: "", date: "", time: "", location: "",
+    category: "", description: "", price: "", image: "",
+  });
+  const [editSaving,  setEditSaving]  = useState(false);
+  const [editError,   setEditError]   = useState("");
+  const [editSuccess, setEditSuccess] = useState(false);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -83,7 +107,6 @@ export default function AdminPage() {
     }
   };
 
-  // Restore session on page reload
   useEffect(() => {
     if (sessionStorage.getItem("nene_admin_authed") === "1") setAuthed(true);
   }, []);
@@ -118,12 +141,72 @@ export default function AdminPage() {
     }
   };
 
+  // ── Open edit modal pre-filled with current event data ───────────
+  const openEdit = (ev: Event) => {
+    setEditForm({
+      title:       ev.title       ?? "",
+      date:        ev.date        ?? "",
+      time:        ev.time        ?? "",
+      location:    ev.location    ?? "",
+      category:    ev.category    ?? "",
+      description: ev.description ?? "",
+      price:       ev.price       ?? "",
+      image:       ev.image       ?? "",
+    });
+    setEditError("");
+    setEditSuccess(false);
+    setEditModal(ev.id);
+  };
+
+  // ── Save edited event ─────────────────────────────────────────────
+  const saveEdit = async () => {
+    if (!editModal) return;
+    setEditSaving(true);
+    setEditError("");
+    setEditSuccess(false);
+    try {
+      const res = await fetch(`/api/events/${editModal}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:       editForm.title,
+          date:        editForm.date,
+          time:        editForm.time,
+          location:    editForm.location,
+          category:    editForm.category,
+          description: editForm.description,
+          price:       editForm.price,
+          image:       editForm.image,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+
+      // Update local state immediately
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === editModal
+            ? { ...e, ...editForm }
+            : e
+        )
+      );
+      setEditSuccess(true);
+      setTimeout(() => {
+        setEditModal(null);
+        setEditSuccess(false);
+      }, 1000);
+    } catch {
+      setEditError("Failed to save. Please try again.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const logout = () => {
     sessionStorage.removeItem("nene_admin_authed");
     setAuthed(false);
   };
 
-  // ── Login screen ─────────────────────────────────────────────────────────────
+  // ── Login screen ─────────────────────────────────────────────────
   if (!authed) {
     return (
       <main className="min-h-screen bg-[#050511] text-white flex items-center justify-center px-4">
@@ -135,13 +218,11 @@ export default function AdminPage() {
             <h1 className="text-xl font-bold">Admin Panel</h1>
             <p className="text-gray-500 text-sm mt-1">NeneTickets · Restricted Access</p>
           </div>
-
           {authError && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl mb-4 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" /> {authError}
             </div>
           )}
-
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative">
               <input
@@ -163,8 +244,7 @@ export default function AdminPage() {
             >
               {authLoading
                 ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Verifying…</>
-                : <><Lock className="w-4 h-4" /> Enter Admin Panel</>
-              }
+                : <><Lock className="w-4 h-4" /> Enter Admin Panel</>}
             </button>
           </form>
         </div>
@@ -172,7 +252,7 @@ export default function AdminPage() {
     );
   }
 
-  // ── Derived data ─────────────────────────────────────────────────────────────
+  // ── Derived data ─────────────────────────────────────────────────
   const counts = {
     pending:  events.filter((e) => !e.status || e.status === "pending").length,
     approved: events.filter((e) => e.status === "approved").length,
@@ -184,19 +264,18 @@ export default function AdminPage() {
       statusFilter === "all" ? true :
       statusFilter === "pending" ? (!e.status || e.status === "pending") :
       e.status === statusFilter;
-
     const q = search.toLowerCase();
     const matchSearch = !q ||
       e.title?.toLowerCase().includes(q) ||
       e.organizerEmail?.toLowerCase().includes(q) ||
       e.location?.toLowerCase().includes(q);
-
     return matchStatus && matchSearch;
   });
 
-  // ── Admin dashboard ───────────────────────────────────────────────────────────
+  // ── Admin dashboard ───────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-[#050511] text-white">
+
       {/* Header */}
       <div className="border-b border-white/10 bg-black/40 backdrop-blur sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 max-w-6xl flex items-center justify-between">
@@ -223,6 +302,7 @@ export default function AdminPage() {
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-6xl">
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           {[
@@ -284,7 +364,6 @@ export default function AdminPage() {
               const isPending  = !ev.status || ev.status === "pending";
               const isApproved = ev.status === "approved";
               const isRejected = ev.status === "rejected";
-
               return (
                 <div
                   key={ev.id}
@@ -372,6 +451,14 @@ export default function AdminPage() {
 
                     {/* Action buttons */}
                     <div className="flex md:flex-col gap-2 flex-shrink-0 md:items-end justify-end">
+                      {/* Edit button — always visible */}
+                      <button
+                        onClick={() => openEdit(ev)}
+                        className="flex items-center gap-1.5 text-xs font-bold bg-blue-600/10 hover:bg-blue-600/20 border border-blue-600/20 text-blue-400 px-4 py-2.5 rounded-xl transition"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+
                       {isPending && (
                         <>
                           <button
@@ -416,8 +503,8 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Reject / Revoke modal */}
-      {rejectModal && (
+      {/* ── Reject / Revoke modal ── */}
+      {rejectModal && !editModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#0f0f2e] border border-white/10 rounded-2xl p-6 w-full max-w-md">
             <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
@@ -442,6 +529,166 @@ export default function AdminPage() {
               >
                 {actionId === rejectModal ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <XCircle className="w-4 h-4" />}
                 Confirm Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit event modal ── */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-[#0f0f2e] border border-white/10 rounded-2xl p-6 w-full max-w-lg my-4">
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-blue-400" /> Edit Event
+              </h3>
+              <button onClick={() => setEditModal(null)} className="text-gray-500 hover:text-white transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+
+              {/* Title */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Title</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition"
+                />
+              </div>
+
+              {/* Date + Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Date</label>
+                  <input
+                    type="text"
+                    value={editForm.date}
+                    onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
+                    placeholder="e.g. 7 Jun 2026"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Time</label>
+                  <input
+                    type="text"
+                    value={editForm.time}
+                    onChange={(e) => setEditForm((f) => ({ ...f, time: e.target.value }))}
+                    placeholder="e.g. 19:00"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Location</label>
+                <input
+                  type="text"
+                  value={editForm.location}
+                  onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition"
+                />
+              </div>
+
+              {/* Category + Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Category</label>
+                  <select
+                    value={editForm.category}
+                    onChange={(e) => setEditForm((f) => ({ ...f, category: e.target.value }))}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition appearance-none"
+                  >
+                    <option value="">Select…</option>
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Price (display)</label>
+                  <input
+                    type="text"
+                    value={editForm.price}
+                    onChange={(e) => setEditForm((f) => ({ ...f, price: e.target.value }))}
+                    placeholder="e.g. KES 1,200"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Image URL */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                  Image URL <span className="text-blue-400 normal-case font-normal">(must start with https://i.ibb.co/…)</span>
+                </label>
+                <input
+                  type="url"
+                  value={editForm.image}
+                  onChange={(e) => setEditForm((f) => ({ ...f, image: e.target.value }))}
+                  placeholder="https://i.ibb.co/…"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition font-mono text-xs"
+                />
+                {/* Live preview */}
+                {editForm.image && (
+                  <div className="mt-2 w-full h-28 rounded-xl overflow-hidden bg-gray-800">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={editForm.image}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={4}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition resize-none"
+                />
+              </div>
+
+              {/* Error / success */}
+              {editError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> {editError}
+                </div>
+              )}
+              {editSuccess && (
+                <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-sm p-3 rounded-xl flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" /> Saved successfully!
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditModal(null)}
+                className="flex-1 border border-white/10 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/5 transition text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={editSaving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center gap-2"
+              >
+                {editSaving
+                  ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+                  : <><Save className="w-4 h-4" /> Save Changes</>}
               </button>
             </div>
           </div>

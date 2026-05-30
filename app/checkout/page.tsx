@@ -1,5 +1,4 @@
 "use client";
-
 import Navbar from "../../components/shared/Navbar";
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -21,8 +20,8 @@ declare global {
         currency: string;
         ref: string;
         metadata?: Record<string, unknown>;
-        subaccount?: string;          // organizer's Paystack subaccount code
-        transaction_charge?: number;  // Kelly's cut in kobo (stays in main account)
+        subaccount?: string;
+        transaction_charge?: number;
         bearer?: "account" | "subaccount";
         onClose: () => void;
         callback: (response: { reference: string }) => void;
@@ -32,13 +31,12 @@ declare global {
 }
 
 interface PromoCode {
-  discount: number;       // percent (1-100) or fixed KES amount
+  discount: number;
   type: "percent" | "fixed";
   description: string;
   active: boolean;
 }
 
-// Default codes — organizer can override via the host portal (stored in localStorage)
 const DEFAULT_PROMO_CODES: Record<string, PromoCode> = {
   NENE10:    { discount: 10,  type: "percent", description: "10% off — NeneTickets special",   active: true },
   WELCOME20: { discount: 20,  type: "percent", description: "20% off — new user welcome",      active: true },
@@ -78,7 +76,6 @@ function CheckoutContent() {
   const location = params.get("location") ?? "";
   const eventId  = params.get("eventId")  ?? "";
 
-  // Restore base64 image from sessionStorage if it was too large for the URL
   const rawImage = params.get("image") ?? "";
   const image = rawImage === "__session__"
     ? (typeof window !== "undefined" ? sessionStorage.getItem("nene_checkout_image") ?? "" : "")
@@ -87,36 +84,34 @@ function CheckoutContent() {
   const total      = price * quantity;
   const serviceFee = Math.round(total * 0.03);
 
-  const [promoInput, setPromoInput]       = useState("");
-  const [promoCode, setPromoCode]         = useState("");
+  const [promoInput,    setPromoInput]    = useState("");
+  const [promoCode,     setPromoCode]     = useState("");
   const [promoDiscount, setPromoDiscount] = useState(0);
-  const [promoType, setPromoType]         = useState<"percent" | "fixed">("percent");
-  const [promoError, setPromoError]       = useState("");
+  const [promoType,     setPromoType]     = useState<"percent" | "fixed">("percent");
+  const [promoError,    setPromoError]    = useState("");
 
   const discountAmount = promoType === "fixed"
     ? Math.min(promoDiscount, total)
     : Math.round((total * promoDiscount) / 100);
   const grandTotal = Math.max(0, total + serviceFee - discountAmount);
 
-  const [step, setStep]           = useState<CheckoutStep>("summary");
-  const [email, setEmail]         = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [phone, setPhone]         = useState("");
-  const [payError, setPayError]   = useState("");
-  const [ticketId]                = useState(() => generateTicketId());
+  const [step,           setStep]           = useState<CheckoutStep>("summary");
+  const [email,          setEmail]          = useState("");
+  const [emailError,     setEmailError]     = useState("");
+  const [phone,          setPhone]          = useState("");
+  const [payError,       setPayError]       = useState("");
+  const [ticketId]                          = useState(() => generateTicketId());
   const [paystackLoaded, setPaystackLoaded] = useState(false);
-  const [confirmedRef, setConfirmedRef] = useState("");
-  const [emailSent, setEmailSent] = useState<boolean | null>(null);
+  const [confirmedRef,   setConfirmedRef]   = useState("");
+  const [emailSent,      setEmailSent]      = useState<boolean | null>(null);
   const [subaccountCode, setSubaccountCode] = useState<string>("");
 
-  // Build WhatsApp message and URL
   const buildWhatsAppMessage = (id: string) =>
     `🎟 *NeneTickets — Ticket Confirmed!*\n\n*${title}*\n📅 ${date} at ${time}\n📍 ${location}\n\nTicket Type: ${type}\nQuantity: ${quantity}\nTicket ID: *${id}*\n\n${grandTotal === 0 ? "✅ Free Event" : `Amount Paid: KES ${grandTotal.toLocaleString()}`}\n\nShow this message or your QR code at the gate.\n🔗 View ticket: ${process.env.NEXT_PUBLIC_BASE_URL ?? "https://nenetickets.co.ke"}/tickets`;
 
   const getWhatsAppUrl = (id: string) => {
     const msg = encodeURIComponent(buildWhatsAppMessage(id));
     if (phone.trim()) {
-      // Normalise Kenyan numbers: 07xx → 2547xx, +254 → 254
       const digits = phone.replace(/\D/g, "");
       const normalised = digits.startsWith("0") ? `254${digits.slice(1)}` : digits.startsWith("254") ? digits : `254${digits}`;
       return `https://wa.me/${normalised}?text=${msg}`;
@@ -126,10 +121,7 @@ function CheckoutContent() {
 
   // Load Paystack inline script
   useEffect(() => {
-    if (document.getElementById("paystack-inline")) {
-      setPaystackLoaded(true);
-      return;
-    }
+    if (document.getElementById("paystack-inline")) { setPaystackLoaded(true); return; }
     const script = document.createElement("script");
     script.id  = "paystack-inline";
     script.src = "https://js.paystack.co/v1/inline.js";
@@ -137,7 +129,7 @@ function CheckoutContent() {
     document.body.appendChild(script);
   }, []);
 
-  // Fetch the organizer's subaccount code from the event record
+  // Fetch the organizer's subaccount code
   useEffect(() => {
     if (!eventId) return;
     fetch(`/api/events/${eventId}`)
@@ -145,8 +137,18 @@ function CheckoutContent() {
       .then((ev: { subaccount_code?: string } | null) => {
         if (ev?.subaccount_code) setSubaccountCode(ev.subaccount_code);
       })
-      .catch(() => {}); // non-blocking — payment still works without split
+      .catch(() => {});
   }, [eventId]);
+
+  // ── Decrement capacity in Redis after purchase ────────────────────
+  const decrementCapacity = useCallback(() => {
+    if (!eventId) return;
+    fetch(`/api/events/${eventId}/capacity`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ ticketType: type, quantity }),
+    }).catch(() => {}); // fire-and-forget — never blocks checkout
+  }, [eventId, type, quantity]);
 
   const applyPromo = () => {
     const code = promoInput.trim().toUpperCase();
@@ -168,19 +170,16 @@ function CheckoutContent() {
 
   const handlePaymentSuccess = useCallback(async (reference: string) => {
     setStep("paying");
-
     try {
-      // Verify with our backend
       const res  = await fetch(`/api/paystack/verify/${reference}`);
       const data = await res.json() as { paid: boolean };
-
       if (!data.paid) {
         setPayError("Payment could not be verified. Please contact support if money was deducted.");
         setStep("summary");
         return;
       }
 
-      // Save ticket to Redis (primary) — fire-and-forget so checkout never blocks
+      // Save ticket to Redis
       const ticket = {
         id: ticketId,
         title, type, price: grandTotal, quantity,
@@ -192,18 +191,22 @@ function CheckoutContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(ticket),
-      }).catch(() => {/* silent — localStorage below is the fallback */});
-      // localStorage fallback (offline / unauthenticated users)
+      }).catch(() => {});
+
+      // localStorage fallback
       try {
         const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
         existing.push(ticket);
         localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
       } catch { /* storage unavailable */ }
 
+      // ── Decrement remaining capacity ──────────────────────────────
+      decrementCapacity();
+
       setConfirmedRef(reference);
       setStep("confirmed");
 
-      // Send confirmation email (fire-and-forget — never blocks checkout)
+      // Send confirmation email
       fetch("/api/email/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -217,13 +220,14 @@ function CheckoutContent() {
         .then((r) => r.json())
         .then((d: { sent: boolean }) => setEmailSent(d.sent))
         .catch(() => setEmailSent(false));
+
     } catch {
       setPayError("Verification failed. Contact support if money was deducted.");
       setStep("summary");
     }
-  }, [ticketId, title, type, grandTotal, quantity, date, time, location, image, email]);
+  }, [ticketId, title, type, grandTotal, quantity, date, time, location, image, email, decrementCapacity]);
 
-  // For free tickets — skip Paystack, generate ticket directly
+  // For free tickets
   const claimFreeTicket = useCallback(() => {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setEmailError("Enter a valid email address");
@@ -231,9 +235,7 @@ function CheckoutContent() {
     }
     setEmailError("");
     setStep("paying");
-
     const freeRef = `FREE-${ticketId}-${Date.now()}`;
-
     const ticket = {
       id: ticketId,
       title, type, price: 0, quantity,
@@ -241,23 +243,25 @@ function CheckoutContent() {
       purchasedAt: new Date().toISOString(),
       reference: freeRef,
     };
-    // Save to Redis (primary)
+
     fetch("/api/tickets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(ticket),
     }).catch(() => {});
-    // localStorage fallback
+
     try {
       const existing = JSON.parse(localStorage.getItem("nene_sold_tickets") ?? "[]");
       existing.push(ticket);
       localStorage.setItem("nene_sold_tickets", JSON.stringify(existing));
     } catch { /* storage unavailable */ }
 
+    // ── Decrement remaining capacity ──────────────────────────────
+    decrementCapacity();
+
     setConfirmedRef(freeRef);
     setStep("confirmed");
 
-    // Send confirmation email
     fetch("/api/email/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -271,7 +275,7 @@ function CheckoutContent() {
       .then((r) => r.json())
       .then((d: { sent: boolean }) => setEmailSent(d.sent))
       .catch(() => setEmailSent(false));
-  }, [ticketId, title, type, quantity, date, time, location, image, email]);
+  }, [ticketId, title, type, quantity, date, time, location, image, email, decrementCapacity]);
 
   const openPaystack = () => {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -280,21 +284,14 @@ function CheckoutContent() {
     }
     setEmailError("");
     setPayError("");
-
     const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
     if (!publicKey || !paystackLoaded || !window.PaystackPop) {
       setPayError("Payment gateway is still loading. Please try again in a moment.");
       return;
     }
-
-    // ── Split payment calculation ─────────────────────────────────────────────
-    // Buyer pays grandTotal (ticket price + 3% booking fee - any discount).
-    // Organizer receives 95% of the net ticket amount; Kelly keeps the rest.
-    // transaction_charge = amount that stays in Kelly's main Paystack account (kobo).
-    const ticketNet        = total - discountAmount;           // ticket revenue after promo
-    const organizerKobo    = Math.round(ticketNet * 0.95 * 100); // 95% → organizer (kobo)
-    const transactionKobo  = grandTotal * 100 - organizerKobo;   // Kelly's cut (kobo)
-
+    const ticketNet       = total - discountAmount;
+    const organizerKobo   = Math.round(ticketNet * 0.95 * 100);
+    const transactionKobo = grandTotal * 100 - organizerKobo;
     const splitOptions = subaccountCode
       ? { subaccount: subaccountCode, transaction_charge: transactionKobo, bearer: "account" as const }
       : {};
@@ -302,7 +299,7 @@ function CheckoutContent() {
     const handler = window.PaystackPop.setup({
       key: publicKey,
       email,
-      amount: grandTotal * 100, // kobo
+      amount: grandTotal * 100,
       currency: "KES",
       ref: `NENE-${ticketId}-${Date.now()}`,
       metadata: {
@@ -312,14 +309,11 @@ function CheckoutContent() {
         booking_fee_kes:      Math.round(total * 0.03),
       },
       ...splitOptions,
-      onClose: () => {
-        // user closed the popup without paying — do nothing
-      },
+      onClose: () => {},
       callback: (response) => {
         handlePaymentSuccess(response.reference);
       },
     });
-
     handler.openIframe();
   };
 
@@ -334,17 +328,14 @@ function CheckoutContent() {
               <img src={image} alt={title} className="w-full h-36 object-cover opacity-60" />
             )}
             <div className="absolute top-0 inset-x-0 h-36 bg-gradient-to-b from-transparent to-[#050511]" />
-
             <div className="relative -mt-8 flex justify-center">
               <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-xl shadow-green-500/40">
                 <CheckCircle2 className="w-8 h-8 text-white" />
               </div>
             </div>
-
             <div className="px-6 pt-4 pb-6">
               <p className="text-green-400 font-bold text-sm mb-1">Payment Confirmed!</p>
               <h2 className="text-xl font-bold mb-4">{title}</h2>
-
               <div className="grid grid-cols-2 gap-3 text-sm mb-4">
                 <div className="bg-black/30 rounded-xl p-3 text-left">
                   <p className="text-gray-500 text-xs mb-1">Ticket Type</p>
@@ -363,20 +354,16 @@ function CheckoutContent() {
                   <p className="font-bold text-green-400">KES {grandTotal.toLocaleString()}</p>
                 </div>
               </div>
-
               <div className="flex items-center gap-2 my-4">
                 <div className="flex-1 border-t border-dashed border-white/10" />
                 <Ticket className="w-4 h-4 text-gray-600" />
                 <div className="flex-1 border-t border-dashed border-white/10" />
               </div>
-
               <p className="text-xs text-gray-500 mb-1">Ticket Reference</p>
               <p className="text-2xl font-mono font-bold tracking-widest text-white">{ticketId}</p>
               {confirmedRef && (
                 <p className="text-xs text-gray-600 mt-1 font-mono">Paystack ref: {confirmedRef}</p>
               )}
-
-              {/* Email sent indicator */}
               <div className="mt-4">
                 {emailSent === null && (
                   <p className="text-xs text-gray-600 flex items-center justify-center gap-1.5">
@@ -396,9 +383,7 @@ function CheckoutContent() {
               </div>
             </div>
           </div>
-
           <div className="flex flex-col gap-3">
-            {/* WhatsApp CTA — primary action */}
             <a
               href={getWhatsAppUrl(ticketId)}
               target="_blank"
@@ -408,7 +393,6 @@ function CheckoutContent() {
               <MessageCircle className="w-4 h-4" />
               {phone.trim() ? "Send Ticket to My WhatsApp" : "Share Ticket on WhatsApp"}
             </a>
-
             <Link href="/tickets">
               <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2">
                 <Ticket className="w-4 h-4" /> View My Tickets
@@ -442,19 +426,15 @@ function CheckoutContent() {
   return (
     <div className="min-h-screen bg-[#050511] text-white pt-24 pb-16">
       <div className="container mx-auto px-4 max-w-xl">
-
         <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm font-bold mb-8 transition">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-
         <h1 className="text-2xl font-bold mb-8">Checkout</h1>
-
         {payError && (
           <div className="mb-6 bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-4 rounded-xl flex items-start gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {payError}
           </div>
         )}
-
         <div className="space-y-5">
           {/* Event card */}
           <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
@@ -481,10 +461,7 @@ function CheckoutContent() {
             <div className="flex justify-between text-gray-500">
               <span className="flex items-center gap-1.5">
                 Booking fee (3%)
-                <span
-                  title="A 3% booking fee is charged to cover payment processing. This fee is non-refundable."
-                  className="cursor-help text-gray-600 hover:text-gray-400 transition"
-                >
+                <span title="A 3% booking fee covers payment processing. Non-refundable." className="cursor-help text-gray-600 hover:text-gray-400 transition">
                   <Info className="w-3.5 h-3.5" />
                 </span>
               </span>
@@ -543,7 +520,7 @@ function CheckoutContent() {
                 <AlertCircle className="w-3.5 h-3.5" /> Refund Policy
               </p>
               <p className="text-xs text-gray-500 leading-relaxed">
-                Tickets are <strong className="text-gray-400">non-refundable</strong> once purchased, except if the event is officially cancelled by the organiser — in which case you are entitled to a full ticket refund within 7–14 business days. The 3% booking fee is non-refundable in all cases. Questions?{" "}
+                Tickets are <strong className="text-gray-400">non-refundable</strong> once purchased, except if the event is officially cancelled by the organiser. The 3% booking fee is non-refundable in all cases. Questions?{" "}
                 <a href="mailto:support@nenetickets.co.ke" className="text-blue-400 hover:underline">support@nenetickets.co.ke</a>
               </p>
             </div>
@@ -551,9 +528,7 @@ function CheckoutContent() {
 
           {/* Email input */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-            <label className="block text-sm font-bold text-gray-300 mb-2">
-              Email for ticket delivery
-            </label>
+            <label className="block text-sm font-bold text-gray-300 mb-2">Email for ticket delivery</label>
             <input
               type="email"
               value={email}
@@ -571,7 +546,7 @@ function CheckoutContent() {
             <p className="text-xs text-gray-600 mt-2">Your ticket confirmation will be sent here.</p>
           </div>
 
-          {/* WhatsApp number (optional) */}
+          {/* WhatsApp number */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-green-400" />
@@ -615,7 +590,7 @@ function CheckoutContent() {
             </button>
           )}
 
-          {/* Payment methods / free notice */}
+          {/* Payment methods */}
           {grandTotal === 0 ? (
             <div className="flex flex-col items-center gap-1.5 text-center">
               <p className="text-xs text-green-500 font-bold flex items-center gap-1.5">

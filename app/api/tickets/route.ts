@@ -1,7 +1,10 @@
 // app/api/tickets/route.ts  (FULL REPLACEMENT)
-// Changes from original:
-//  - POST now generates a ticketToken and stores a reverse-index key
-//    so the scanner can look up any ticket without knowing the buyer's userId.
+// Key changes from previous version:
+//  - POST no longer returns 401 for unauthenticated users.
+//    Guests are stored under nene:tickets:ref:{reference} so their
+//    tickets are visible in the organiser dashboard KEYS scan.
+//  - ticketToken reverse-index is always written regardless of auth.
+//  - email + eventId are now stored on the ticket record.
 
 import { NextResponse } from "next/server";
 import { auth }         from "@clerk/nextjs/server";
@@ -9,7 +12,7 @@ import { auth }         from "@clerk/nextjs/server";
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
-// ─── Redis helpers ────────────────────────────────────────────────
+// ─── Redis helpers ────────────────────────────────────────────────────────────
 
 async function redisGet<T>(key: string): Promise<T | null> {
   const url   = process.env.KV_REST_API_URL;
@@ -20,12 +23,16 @@ async function redisGet<T>(key: string): Promise<T | null> {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  const json = await res.json() as { result: string | null };
+  if (!res.ok) return null;
 
+  const json = await res.json() as { result: string | null };
   if (!json.result) return null;
+
   try {
-    const parsed = JSON.parse(json.result);
-    return (typeof parsed === "string" ? JSON.parse(parsed) : parsed) as T;
+    let data: unknown = json.result;
+    if (typeof data === "string") data = JSON.parse(data);
+    if (typeof data === "string") data = JSON.parse(data); // double-encode fallback
+    return data as T;
   } catch {
     return null;
   }
@@ -37,24 +44,20 @@ async function redisSet(key: string, value: unknown): Promise<void> {
   if (!url || !token) return;
 
   await fetch(`${url}/pipeline`, {
-    method: "POST",
+    method:  "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization:  `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify([["SET", key, JSON.stringify(value)]]),
   });
 }
 
-function ticketKey(userId: string) {
-  return `nene:tickets:${userId}`;
-}
+function ticketKey(userId: string)      { return `nene:tickets:${userId}`; }
+function guestKey (reference: string)   { return `nene:tickets:ref:${reference}`; }
+function tokenKey (ticketToken: string) { return `nene:ticket:token:${ticketToken}`; }
 
-function tokenKey(ticketToken: string) {
-  return `nene:ticket:token:${ticketToken}`;
-}
-
-// ─── GET — fetch all tickets for the signed-in user ───────────────
+// ─── GET — fetch all tickets for the signed-in user ──────────────────────────
 
 export async function GET() {
   try {
@@ -69,33 +72,16 @@ export async function GET() {
   }
 }
 
-// ─── POST — save a new ticket ──────────────────────────────────────
-
-export interface TicketPayload {
-  bookingRef:    string;
-  eventId:       string;
-  eventTitle:    string;
-  eventDate:     string;
-  eventVenue?:   string;
-  attendeeName:  string;
-  attendeeEmail: string;
-  quantity:      number;
-  amount:        number;
-  // Any extra fields your checkout sends are preserved
-  [key: string]: unknown;
-}
+// ─── POST — save a new ticket (works for both logged-in and guest buyers) ─────
 
 export async function POST(req: Request) {
   try {
     const { userId } = await auth();
-    if (!userId) return NextResponse.json({ success: false }, { status: 401 });
+    const ticket = await req.json() as Record<string, unknown>;
 
-    const ticket = await req.json() as TicketPayload;
-
-    // Generate a unique scannable token for this ticket
+    // Generate a unique scannable token
     const ticketToken = `tk_${crypto.randomUUID().replace(/-/g, "")}`;
 
-    // Attach the token to the ticket object
     const ticketWithToken = {
       ...ticket,
       ticketToken,
@@ -104,24 +90,27 @@ export async function POST(req: Request) {
       createdAt:   new Date().toISOString(),
     };
 
-    // 1. Save to the user's ticket list
-    const key     = ticketKey(userId);
-    const tickets = await redisGet<object[]>(key) ?? [];
-    tickets.unshift(ticketWithToken);
-    await redisSet(key, tickets);
+    // ── Choose storage key ───────────────────────────────────────────────────
+    // Authenticated user → keyed by Clerk userId (shows on /tickets page)
+    // Guest buyer        → keyed by payment reference (always scannable + visible
+    //                      to the organiser dashboard via KEYS scan)
+    const key = userId
+      ? ticketKey(userId)
+      : guestKey(String(ticket.reference ?? ticketToken));
 
-    // 2. Store a reverse-index entry so the scanner can find this ticket
-    //    without knowing the buyer's userId
+    const existing = await redisGet<object[]>(key) ?? [];
+    existing.unshift(ticketWithToken);
+    await redisSet(key, existing);
+
+    // ── Reverse-index for scanner ────────────────────────────────────────────
     await redisSet(tokenKey(ticketToken), {
-      userId,
-      bookingRef:    ticket.bookingRef,
-      eventId:       ticket.eventId,
-      eventTitle:    ticket.eventTitle,
-      eventDate:     ticket.eventDate,
-      eventVenue:    ticket.eventVenue ?? "",
-      attendeeName:  ticket.attendeeName,
-      attendeeEmail: ticket.attendeeEmail,
-      quantity:      ticket.quantity,
+      userId:        userId ?? null,
+      bookingRef:    ticket.id          ?? ticket.reference,
+      eventId:       ticket.eventId     ?? null,
+      eventTitle:    ticket.title       ?? ticket.eventTitle ?? "",
+      attendeeName:  ticket.attendeeName ?? ticket.name ?? "",
+      attendeeEmail: ticket.email       ?? ticket.attendeeEmail ?? "",
+      quantity:      ticket.quantity    ?? 1,
       checkedIn:     false,
       checkedInAt:   null as string | null,
     });

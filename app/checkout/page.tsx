@@ -186,6 +186,8 @@ function CheckoutContent() {
         date, time, location, image,
         purchasedAt: new Date().toISOString(),
         reference,
+        email,    // buyer email — needed for organizer dashboard
+        eventId,  // event ID — needed for capacity + sales matching
       };
       fetch("/api/tickets", {
         method: "POST",
@@ -242,6 +244,8 @@ function CheckoutContent() {
       date, time, location, image,
       purchasedAt: new Date().toISOString(),
       reference: freeRef,
+      email,    // buyer email — needed for organizer dashboard
+      eventId,  // event ID — needed for capacity + sales matching
     };
 
     fetch("/api/tickets", {

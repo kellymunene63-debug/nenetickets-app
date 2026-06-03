@@ -205,6 +205,9 @@ function CheckoutContent() {
       // ── Decrement remaining capacity ──────────────────────────────
       decrementCapacity();
 
+      // ── Mark cart completed so reminder email is suppressed ────────
+      fetch(`/api/cart?id=${ticketId}`, { method: "DELETE" }).catch(() => {});
+
       setConfirmedRef(reference);
       setStep("confirmed");
 
@@ -263,6 +266,9 @@ function CheckoutContent() {
     // ── Decrement remaining capacity ──────────────────────────────
     decrementCapacity();
 
+    // ── Mark cart completed (free ticket claimed, no reminder needed) ─
+    fetch(`/api/cart?id=${ticketId}`, { method: "DELETE" }).catch(() => {});
+
     setConfirmedRef(freeRef);
     setStep("confirmed");
 
@@ -293,6 +299,17 @@ function CheckoutContent() {
       setPayError("Payment gateway is still loading. Please try again in a moment.");
       return;
     }
+
+    // ── Save abandoned-cart so we can send a reminder if they don't finish ──
+    fetch("/api/cart", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        cartId: ticketId, email, title, type,
+        price: price, quantity, date, time, location, eventId,
+      }),
+    }).catch(() => {});
+
     const ticketNet       = total - discountAmount;
     const organizerKobo   = Math.round(ticketNet * 0.95 * 100);
     const transactionKobo = grandTotal * 100 - organizerKobo;

@@ -38,7 +38,7 @@ interface PromoCode {
 }
 
 const DEFAULT_PROMO_CODES: Record<string, PromoCode> = {
-  NENE10:    { discount: 10,  type: "percent", description: "10% off — NeneTickets special",   active: true },
+  NENE10:    { discount: 0,  type: "percent", description: "0% off — NeneTickets special",   active: true },
   WELCOME20: { discount: 20,  type: "percent", description: "20% off — new user welcome",      active: true },
   STUDENT15: { discount: 15,  type: "percent", description: "15% off — student discount",      active: true },
   EARLYBIRD: { discount: 20,  type: "percent", description: "20% off — early bird deal",       active: true },

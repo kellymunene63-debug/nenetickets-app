@@ -517,7 +517,7 @@ function CheckoutContent() {
                   value={promoInput}
                   onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && applyPromo()}
-                  placeholder="e.g. NENE10"
+                  placeholder="e.g. DISCOUNTCODE"
                   className={`flex-1 bg-black/40 border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none transition ${
                     promoError ? "border-red-500" : "border-white/10 focus:border-blue-500"
                   }`}
